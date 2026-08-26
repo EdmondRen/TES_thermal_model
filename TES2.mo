@@ -48,7 +48,7 @@ equation
   P_Joule = v * i;
 
   // Heat capacity (temperature dependent)
-  cp = a1*T + a3*Tr^3;
+  cp = a1*T + a3*T^3;
   
   // Thermal energy balance
   heatPort.T = T;
