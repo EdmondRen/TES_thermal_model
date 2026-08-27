@@ -11,7 +11,7 @@ model System_1block_linearG
     Placement(transformation(origin = {-84, 2}, extent = {{-10, -10}, {10, 10}})));
   Modelica.Electrical.Analog.Basic.Inductor L(L(displayUnit = "nH") = 2.01e-7) annotation(
     Placement(transformation(origin = {-60, 30}, extent = {{-6, -6}, {6, 6}})));
-  TES tes(Tc(displayUnit = "K") = 0.048, alpha0 = 20, C = 2e-14, Rn = 0.3, T(displayUnit = "K")) annotation(
+  libTES.TES tes(Tc(displayUnit = "K") = 0.048, alpha0 = 20, C = 2e-14, Rn = 0.3, T(displayUnit = "K")) annotation(
     Placement(transformation(origin = {-38, 24}, extent = {{-10, -10}, {10, 10}})));
   Modelica.Thermal.HeatTransfer.Components.ThermalConductor thermalConductor(G = 5.4e-11)  annotation(
     Placement(transformation(origin = {-8, 0}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));

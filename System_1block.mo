@@ -5,9 +5,9 @@ model System_1block
     Placement(transformation(origin = {-22, 48}, extent = {{-10, -10}, {10, 10}})));
   Modelica.Blocks.Sources.Pulse Pulse(amplitude = 3.2e-10, width = 100e-7, period = 1, nperiod = 1, startTime(displayUnit = "ms") = 0.01) annotation(
     Placement(transformation(origin = {-50, 48}, extent = {{-10, -10}, {10, 10}})));
-  TES tes(Tc(displayUnit = "K") = 0.048, alpha0 = 50, C = 5e-14, Rn = 0.33) annotation(
+  libTES.TES tes(Tc(displayUnit = "K") = 0.048, alpha0 = 50, C = 5e-14, Rn = 0.33) annotation(
     Placement(transformation(origin = {-18, 0}, extent = {{-10, -10}, {10, 10}})));
-  ThermlConductanceN G1(K = 1.5e-6, n = 5)  annotation(
+  libTES.ThermlConductanceN G1(K = 1.5e-6, n = 5)  annotation(
     Placement(transformation(origin = {12, -22}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Resistor RL(R (displayUnit = "mOhm")= 0.02) annotation(
     Placement(transformation(origin = {-50, 0}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
