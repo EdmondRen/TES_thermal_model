@@ -5,7 +5,7 @@ model System_1block
     Placement(transformation(origin = {-22, 48}, extent = {{-10, -10}, {10, 10}})));
   Modelica.Blocks.Sources.Pulse Pulse(amplitude = 3.2e-10, width = 100e-7, period = 1, nperiod = 1, startTime(displayUnit = "ms") = 0.01) annotation(
     Placement(transformation(origin = {-50, 48}, extent = {{-10, -10}, {10, 10}})));
-  libTES.TES tes(Tc(displayUnit = "K") = 0.048, alpha0 = 50, C = 5e-14, Rn = 0.33) annotation(
+  libTES.TES2 tes(Rn = TES_Rn, Tc = TES_Tc, alpha0 = TES_alpha, m = TES_m, a1 = TES_a1, a3 = TES_a3) annotation(
     Placement(transformation(origin = {-18, 0}, extent = {{-10, -10}, {10, 10}})));
   libTES.ThermlConductanceN G1(K = 1.5e-6, n = 5)  annotation(
     Placement(transformation(origin = {12, -22}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
@@ -17,6 +17,14 @@ model System_1block
     Placement(transformation(origin = {-38, 6}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Electrical.Analog.Sources.ConstantCurrent TESBias(I(displayUnit = "uA") = 1.1e-5) annotation(
     Placement(transformation(origin = {-62, 0}, extent = {{-6, -6}, {6, 6}}, rotation = 90)));
+  //  - Electrical, TES
+  parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance";
+  parameter Modelica.Units.SI.Temperature TES_Tc = 0.048 "TES critical temp.";
+  parameter Real TES_alpha = 10 "TES alpha";
+  parameter Modelica.Units.SI.Mass TES_m = 6.53e-13 "TES mass";
+  parameter Real TES_a1 = 5.00e-2 "TES heat capacity linear term";
+  parameter Real TES_a3 = 9.24e-4 "TES heat capacity cubic term";
+
 equation
   connect(Pulse.y, HeatSource.Q_flow) annotation(
     Line(points = {{-39, 48}, {-33, 48}}, color = {0, 0, 127}));

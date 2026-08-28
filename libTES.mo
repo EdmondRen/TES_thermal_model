@@ -154,8 +154,8 @@ model TES
     parameter Real a3 = 0;
     parameter Real a5 = 0;
     parameter Real T0 = 0;
-    parameter Real Tr; // Relative temperature for Taylor expansion
-    parameter SI.Temperature T_start = 0;
+//    parameter Real Tr; // Relative temperature for Taylor expansion
+    parameter SI.Temperature T_start = 0.01;
   
     SI.Temperature T(start=T_start);
     SI.SpecificHeatCapacity cp;
@@ -166,8 +166,8 @@ model TES
   equation
     port.T = T;
     
-    Tr = T - T0;
-    cp = a0 + a1*Tr + a3*Tr^3 + a5*Tr^5;
+//    Tr = T - T0;
+    cp = a0 + a1*T + a3*T^3 + a5*T^5;
   
     m*cp*der(T) = port.Q_flow;
   
