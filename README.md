@@ -59,7 +59,11 @@ C * der(T) = P_Joule + heatPort.Q_flow;
 
 `HeatCapacitorPoly.mo` supports temperature-dependent heat capacity through a polynomial expansion around `T0`. `ThermlConductanceN` models power-law thermal transport between two heat ports.
 
-## Current Status
+## Modeled systems
+
+### LMO
+
+<img src="System_LMO.svg" width="400" alt="LMO system thermal model" />
 
 
 

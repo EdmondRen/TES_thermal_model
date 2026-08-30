@@ -52,7 +52,7 @@ model TES
       annotation(Placement(transformation(origin = {-200, -40}, extent = {{90, -10}, {110, 10}}), iconTransformation(origin = {-200, -60}, extent = {{90, -10}, {110, 10}})));
     
     // Heat port
-    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a heatPort
+    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a heatPort(T(displayUnit="mK"))
       annotation(Placement(transformation(origin = {-20, 100}, extent = {{-10, -110}, {10, -90}}), iconTransformation(origin = {100, 100}, extent = {{-10, -110}, {10, -90}})));
   
     
@@ -79,7 +79,10 @@ model TES
     Modelica.Units.SI.Resistance R;
   
     Modelica.Units.SI.Power P_Joule;
-    Modelica.Units.SI.Temperature T(start = 0.05, fixed = false);
+    Modelica.Units.SI.Temperature T(start = 0.05, fixed = false, displayUnit="mK");
+    
+    // Variables for results
+    Real C;
   
   equation
     
@@ -95,7 +98,8 @@ model TES
   
     // Heat capacity (temperature dependent)
     cp = a1*T + a3*T^3;
-    
+    C = m * cp;
+      
     // Thermal energy balance
     heatPort.T = T;
     m * cp * der(T) = P_Joule + heatPort.Q_flow;
@@ -113,37 +117,42 @@ model TES
   ", horizontalAlignment = TextAlignment.Left), Rectangle(extent = {{-100, 100}, {100, -100}}), Line(origin = {-76, 10}, points = {{-24, 50}, {16, 50}, {16, 30}, {24, 30}, {24, -50}, {8, -50}, {8, 30}, {16, 30}, {16, 30}}), Line(origin = {-75, -50}, points = {{15, 10}, {15, -10}, {-15, -10}, {-15, -10}}), Line(origin = {-57.0045, 2.71811}, points = {{-20.9955, -26.7181}, {15.0045, 23.2819}, {9.00454, 27.2819}, {21.0045, 19.2819}, {21.0045, 19.2819}}), Text(origin = {-2, 123}, extent = {{-50, 27}, {50, -27}}, textString = "%name")}));
   end TES2;
 
-  model ThermlConductanceN
+model ThermlConductanceN
+
+  Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a port_a(T(displayUnit="mK"))
+    annotation(Placement(transformation(origin = {0, 40}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(extent = {{-110, -10}, {-90, 10}})));
+
+  Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_b port_b(T(displayUnit="mK"))
+    annotation(Placement(transformation(origin = {200, 40}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(origin = {200, 0}, extent = {{-110, -10}, {-90, 10}})));
   
-    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a port_a
-      annotation(Placement(transformation(origin = {0, 40}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(extent = {{-110, -10}, {-90, 10}})));
-  
-    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_b port_b
-      annotation(Placement(transformation(origin = {200, 40}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(origin = {200, 0}, extent = {{-110, -10}, {-90, 10}})));
-    
-    parameter Real K = 1e-8
-      "Thermal coupling coefficient [W/K^n]";
-  
-    parameter Real n = 3
-      "Thermal transport exponent";
-  
-    Modelica.Units.SI.HeatFlowRate Q_flow;
-    
-    
-  equation
+  parameter Real K = 1e-8
+    "Thermal coupling coefficient  such that Q_flow = K*(Ta^n - Tb^n) [W/K^n]";
+
+  parameter Real n = 3
+    "Thermal transport exponent";
+
+  Modelica.Units.SI.HeatFlowRate Q_flow;
   
   
-    Q_flow = K * (port_a.T^n - port_b.T^n);
+  // Variables for results
+  Real G;
   
-    port_a.Q_flow = Q_flow;
-    port_b.Q_flow = -Q_flow;
+equation
+
+
+  Q_flow = K * (port_a.T^n - port_b.T^n);
   
-  
-  annotation(
-      Icon(graphics = {Rectangle(lineColor = {170, 0, 0}, fillColor = {255, 255, 255}, pattern = LinePattern.None, fillPattern = FillPattern.Forward, extent = {{-68, 20}, {68, -20}}), Line(origin = {-79.5, 0}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Line(origin = {78.5, 0}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Text(origin = {-2, -46}, extent = {{-36, 18}, {36, -18}}, textString = "K=%K
-  n=%n"), Text(origin = {1, 44}, textColor = {0, 0, 127}, extent = {{-59, 32}, {59, -32}}, textString = "%name", textStyle = {TextStyle.Bold})}),
-    Diagram(graphics));
-  end ThermlConductanceN;
+  G = n * K * port_a.T^(n-1);
+
+  port_a.Q_flow = Q_flow;
+  port_b.Q_flow = -Q_flow;
+
+
+annotation(
+    Icon(graphics = {Rectangle(lineColor = {170, 0, 0}, fillColor = {255, 255, 255}, pattern = LinePattern.None, fillPattern = FillPattern.Forward, extent = {{-68, 20}, {68, -20}}), Line(origin = {-79.5, 0}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Line(origin = {78.5, 0}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Text(origin = {-2, -46}, extent = {{-36, 18}, {36, -18}}, textString = "K=%K
+n=%n"), Text(origin = {1, 44}, textColor = {0, 0, 127}, extent = {{-59, 32}, {59, -32}}, textString = "%name", textStyle = {TextStyle.Bold})}),
+  Diagram(graphics));
+end ThermlConductanceN;
 
   model HeatCapacitorPoly
     import Modelica.Units.SI;
@@ -154,22 +163,26 @@ model TES
     parameter Real a3 = 0;
     parameter Real a5 = 0;
     parameter Real T0 = 0;
-//    parameter Real Tr; // Relative temperature for Taylor expansion
-    parameter SI.Temperature T_start = 0.01;
   
-    SI.Temperature T(start=T_start);
+    SI.Temperature T(start=0.05, displayUnit="mK");
     SI.SpecificHeatCapacity cp;
   
     Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a port
         annotation(Placement(transformation(origin = {-20, 100}, extent = {{-10, -110}, {10, -90}}), iconTransformation(extent = {{-10, -110}, {10, -90}})));
+        
+        
+    // Variables for results
+    Real C;
   
   equation
     port.T = T;
     
-//    Tr = T - T0;
     cp = a0 + a1*T + a3*T^3 + a5*T^5;
+    C = m*cp;
   
-    m*cp*der(T) = port.Q_flow;
+    C*der(T) = port.Q_flow;
+    
+    
   
   annotation(
       Diagram(graphics),
