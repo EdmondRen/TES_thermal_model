@@ -10,19 +10,15 @@ model System_LMO
   Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow HeatSource1(T_ref(displayUnit = "K") = 0.1) annotation(
     Placement(transformation(origin = {-72, 4}, extent = {{-6, -6}, {6, 6}})));
   libTES.TES2 tes(Rn = TES_Rn, T(start = TES_Tinit), Tc = TES_Tc, a1 = TES_a1, a3 = TES_a3, alpha0 = TES_alpha, m = TES_m) annotation(
-    Placement(transformation(origin = {46, 44}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));    
+    Placement(transformation(origin = {46, 44}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g1(K = K1, n = 5) annotation(
     Placement(transformation(origin = {-44, 22}, extent = {{-10, -10}, {10, 10}})));
   libTES.ThermlConductanceN g2(K = K2, n = 2) annotation(
     Placement(transformation(origin = {-18, 22}, extent = {{-10, -10}, {10, 10}})));
   libTES.ThermlConductanceN g3(K = K3, n = 2) annotation(
     Placement(transformation(origin = {6, 22}, extent = {{-10, -10}, {10, 10}})));
-  libTES.ThermlConductanceN g11(K = K11, n = 5) annotation(
-    Placement(transformation(origin = {108, -42}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g12(K = K12, n = 4) annotation(
     Placement(transformation(origin = {26, -18}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
-  libTES.ThermlConductanceN g10(K = K10, n = 2) annotation(
-    Placement(transformation(origin = {108, -8}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g13(K = K13, n = 4) annotation(
     Placement(transformation(origin = {26, -42}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g14(K = K14, n = 4) annotation(
@@ -49,7 +45,7 @@ model System_LMO
     Placement(transformation(origin = {-6, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Ground GND annotation(
     Placement(transformation(origin = {-32, 56}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
-  Modelica.Electrical.Analog.Basic.Inductor L(L(displayUnit = "nH") = Bias_L, i(start=Bias_I)) annotation(
+  Modelica.Electrical.Analog.Basic.Inductor L(L = Bias_L, i(start = Bias_I*0.3)) annotation(
     Placement(transformation(origin = {2, 68}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Electrical.Analog.Sources.ConstantCurrent TESBias(I = Bias_I) annotation(
     Placement(transformation(origin = {-18, 62}, extent = {{-6, -6}, {6, 6}}, rotation = 90)));
@@ -63,23 +59,21 @@ model System_LMO
     Placement(transformation(origin = {60, 22}, extent = {{-10, -10}, {10, 10}})));
   libTES.ThermlConductanceN g8(K = K8, n = 2) annotation(
     Placement(transformation(origin = {84, 22}, extent = {{-10, -10}, {10, 10}})));
-  libTES.ThermlConductanceN g9(K = K9, n = 2) annotation(
-    Placement(transformation(origin = {94, 6}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));    
   // Parameters
   //  - Exitation
   parameter Real Edep = 200000 "[eV], energy deposition";
   parameter Real Edep_time = 1.00e-7 "[s], time for energy deposition";
-  parameter Real Edep_thermalfraction = 9.00e-1 "Fraction of energy in phonon system";
+  parameter Real Edep_thermalfraction = 10.00e-1 "Fraction of energy in phonon system";
   parameter Modelica.Units.SI.Time Edep_starttime = 50e-3 "Start time of energy deposition";
   //  - Electrical, bias
-  parameter Modelica.Units.SI.Current Bias_I = 90.1e-6 "Bias current";
+  parameter Modelica.Units.SI.Current Bias_I = 36.1e-6 "Bias current";
   parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh+Rp)";
   parameter Modelica.Units.SI.Inductance Bias_L = 3.00e-7 "Bias circuit indutance";
   //  - Electrical, TES
   parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance";
-  parameter Modelica.Units.SI.Temperature TES_Tc = 0.04 "TES critical temp.";
-  parameter Modelica.Units.SI.Temperature TES_Tinit = 0.04 "Initial guess of TES temperature";
-  parameter Real TES_alpha = 10 "TES alpha";
+  parameter Modelica.Units.SI.Temperature TES_Tc = 0.025 "TES critical temp.";
+  parameter Modelica.Units.SI.Temperature TES_Tinit = 0.025 "Initial guess of TES temperature";
+  parameter Real TES_alpha = 20 "TES alpha";
   parameter Modelica.Units.SI.Mass TES_m = 26.53e-12 "TES mass";
   parameter Real TES_a1 = 5.00e-2 "TES heat capacity linear term";
   parameter Real TES_a3 = 9.24e-4 "TES heat capacity cubic term";
@@ -88,13 +82,13 @@ model System_LMO
   parameter Real K2 = 8.80e-6 "Goldpad -> Goldwirebond";
   parameter Real K3 = 8.80e-6 "Goldwirebond -> Goldpad2";
   parameter Real K4 = 0.2e-7 "Goldpad2 -> TES Electron System";
-  parameter Real K5 = 16e-5 "Goldpad2 -> Si chip";
+  parameter Real K5 = 6.8e-5 "Goldpad2 -> Si chip"; //
   parameter Real K6 = 1.08e-5 "Si chip -> TES, electron-phonon coupling";
-  parameter Real K7 = 0.15e-7 "TES -> GoldPadTES";
-  parameter Real K8 = 6.2e-8 "GoldpadTES -> Meander";
-  parameter Real K9 = 5.64e-5 "Meander -> Si chip";
-  parameter Real K10 = 5.64e-5 "Meander -> WireBond2";
-  parameter Real K11 = 1.13e-12 "WireBond2 -> bath";
+  parameter Real K7 = 0.1e-7 "TES -> GoldPadTES";
+  parameter Real K8 = 1.2e-8 "GoldpadTES -> Meander";
+  parameter Real K9 = 5.64e-5 "Meander -> WireBond2";
+  parameter Real K10 = 5.64e-5 "WireBond2 -> bath";
+  parameter Real K11 = 1.45e-4 "Meander -> Si chip";
   parameter Real K12 = 2.70e-6 "Si chip -> Glue";
   parameter Real K13 = 2.70e-6 "Glue -> bath";
   parameter Real K14 = 7.84e-8 "Absorber -> bath";
@@ -155,7 +149,12 @@ model System_LMO
   Real G12;
   Real G13;
   Real G14;
-
+  libTES.ThermlConductanceN g11(K = K11, n = 5) annotation(
+    Placement(transformation(origin = {94, 6}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
+  libTES.ThermlConductanceN g10(K = K10, n = 2) annotation(
+    Placement(transformation(origin = {108, -42}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
+  libTES.ThermlConductanceN g9(K = K9, n = 2) annotation(
+    Placement(transformation(origin = {108, -16}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
 equation
   C1 = target.C;
   C2 = goldPadTarget.C;
@@ -249,29 +248,30 @@ equation
     Line(points = {{74, 22}, {70, 22}}, color = {191, 0, 0}));
   connect(meander.port, g8.port_b) annotation(
     Line(points = {{94, 26}, {94, 22}}, color = {191, 0, 0}));
-  connect(g8.port_b, g9.port_a) annotation(
-    Line(points = {{94, 22}, {94, 16}}, color = {191, 0, 0}));
-  connect(g9.port_b, g6.port_b) annotation(
-    Line(points = {{94, -4}, {46, -4}}, color = {191, 0, 0}));
-  connect(g8.port_b, g10.port_a) annotation(
-    Line(points = {{94, 22}, {108, 22}, {108, 2}}, color = {191, 0, 0}));
-  connect(wireBond2.port, g10.port_b) annotation(
-    Line(points = {{102, -30}, {108, -30}, {108, -18}}, color = {191, 0, 0}));
-  connect(g11.port_a, g10.port_b) annotation(
-    Line(points = {{108, -32}, {108, -18}}, color = {191, 0, 0}));
-  connect(g11.port_b, g13.port_b) annotation(
-    Line(points = {{108, -52}, {26, -52}}, color = {191, 0, 0}));
   connect(g13.port_b, g14.port_b) annotation(
     Line(points = {{26, -52}, {-58, -52}, {-58, -44}}, color = {191, 0, 0}));
   connect(fixedTemperature.port, g14.port_b) annotation(
     Line(points = {{-68, -52}, {-58, -52}, {-58, -44}}, color = {191, 0, 0}));
   connect(tes.n, RL.n) annotation(
     Line(points = {{40, 54}, {40, 56}, {-6, 56}}, color = {0, 0, 255}));
+  connect(g11.port_a, g8.port_b) annotation(
+    Line(points = {{94, 16}, {94, 22}}, color = {191, 0, 0}));
+  connect(g11.port_b, silicon.port) annotation(
+    Line(points = {{94, -4}, {68, -4}}, color = {191, 0, 0}));
+  connect(g9.port_a, g8.port_b) annotation(
+    Line(points = {{108, -6}, {108, 22}, {94, 22}}, color = {191, 0, 0}));
+  connect(g10.port_a, g9.port_b) annotation(
+    Line(points = {{108, -32}, {108, -26}}, color = {191, 0, 0}));
+  connect(wireBond2.port, g10.port_a) annotation(
+    Line(points = {{102, -30}, {108, -30}, {108, -32}}, color = {191, 0, 0}));
+  connect(g10.port_b, g13.port_b) annotation(
+    Line(points = {{108, -52}, {26, -52}}, color = {191, 0, 0}));
   annotation(
     uses(Modelica(version = "4.1.0")),
-    Diagram(graphics = {Text(origin = {-60, 19}, rotation = 180, extent = {{-3, 2}, {3, -2}}, textString = "1", textStyle = {TextStyle.Bold}), Text(origin = {-30, 19}, extent = {{-4, 2}, {4, -2}}, textString = "2", textStyle = {TextStyle.Bold}), Text(origin = {-8, 19}, extent = {{-4, 2}, {4, -2}}, textString = "3", textStyle = {TextStyle.Bold}), Text(origin = {19, 17}, extent = {{-3, 3}, {3, -3}}, textString = "4", textStyle = {TextStyle.Bold}), Text(origin = {68, -9}, extent = {{-4, 3}, {4, -3}}, textString = "5", textStyle = {TextStyle.Bold}), Text(origin = {-59, -54}, extent = {{-5, 4}, {5, -4}}, textString = "0", textStyle = {TextStyle.Bold}), Text(origin = {99, 26}, extent = {{-3, 2}, {3, -2}}, textString = "7", textStyle = {TextStyle.Bold}), Text(origin = {112, -26}, extent = {{-4, 2}, {4, -2}}, textString = "8", textStyle = {TextStyle.Bold}), Text(origin = {21, -30}, extent = {{-3, 2}, {3, -2}}, textString = "9", textStyle = {TextStyle.Bold}), Line(origin = {71, 22}, points = {{-100, 0}, {37, 0}, {37, -50}}, color = {255, 170, 0}, thickness = 2), Text(origin = {72, 17}, extent = {{-4, 3}, {4, -3}}, textString = "6", textStyle = {TextStyle.Bold}), Text(origin = {51, 17}, extent = {{-5, 3}, {5, -3}}, textString = "10", textStyle = {TextStyle.Bold}), Rectangle(origin = {58, 27}, fillColor = {232, 232, 232}, pattern = LinePattern.DashDot, lineThickness = 0.5, extent = {{-44, 33}, {44, -33}})}, coordinateSystem(extent = {{-100, -100}, {120, 100}})),
+    Diagram(graphics = {Text(origin = {-60, 19}, rotation = 180, extent = {{-3, 2}, {3, -2}}, textString = "1", textStyle = {TextStyle.Bold}), Text(origin = {-30, 19}, extent = {{-4, 2}, {4, -2}}, textString = "2", textStyle = {TextStyle.Bold}), Text(origin = {-8, 19}, extent = {{-4, 2}, {4, -2}}, textString = "3", textStyle = {TextStyle.Bold}), Text(origin = {19, 17}, extent = {{-3, 3}, {3, -3}}, textString = "4", textStyle = {TextStyle.Bold}), Text(origin = {68, -9}, extent = {{-4, 3}, {4, -3}}, textString = "5", textStyle = {TextStyle.Bold}), Text(origin = {-59, -54}, extent = {{-5, 4}, {5, -4}}, textString = "0", textStyle = {TextStyle.Bold}), Text(origin = {99, 26}, extent = {{-3, 2}, {3, -2}}, textString = "7", textStyle = {TextStyle.Bold}), Text(origin = {112, -26}, extent = {{-4, 2}, {4, -2}}, textString = "8", textStyle = {TextStyle.Bold}), Text(origin = {21, -30}, extent = {{-3, 2}, {3, -2}}, textString = "9", textStyle = {TextStyle.Bold}), Line(origin = {71, 22}, points = {{-100, 0}, {37, 0}, {37, -75}}, color = {255, 170, 0}, thickness = 2), Text(origin = {72, 17}, extent = {{-4, 3}, {4, -3}}, textString = "6", textStyle = {TextStyle.Bold}), Text(origin = {51, 17}, extent = {{-5, 3}, {5, -3}}, textString = "10", textStyle = {TextStyle.Bold}), Rectangle(origin = {58, 27}, fillColor = {232, 232, 232}, pattern = LinePattern.DashDot, lineThickness = 0.5, extent = {{-44, 33}, {44, -33}})}, coordinateSystem(extent = {{-100, -100}, {120, 100}})),
     Icon(coordinateSystem(extent = {{-100, -100}, {120, 100}})),
     version = "",
-    experiment(StartTime = 0, StopTime = 100e-3, Tolerance = 1e-06, Interval = 1e-06),
-    __OpenModelica_commandLineOptions = "--matchingAlgorithm=PFPlusExt --indexReductionMethod=dynamicStateSelection -d=initialization,NLSanalyticJacobian -d=aliasConflicts ");
+    experiment(StartTime = 0, StopTime = 0.1, Tolerance = 1e-06, Interval = 1e-06),
+    __OpenModelica_commandLineOptions = "--matchingAlgorithm=PFPlusExt --indexReductionMethod=dynamicStateSelection -d=initialization,NLSanalyticJacobian -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts -d=aliasConflicts",
+    __OpenModelica_simulationFlags(lv = "LOG_STDOUT,LOG_ASSERT,LOG_STATS", s = "dassl", variableFilter = ".*", iif = "C:/Users/Tom/OneDrive/CDMS/ThermalModel/build/System_LMO_res.mat", iit = "10"));
 end System_LMO;
