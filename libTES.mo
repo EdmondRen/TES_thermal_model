@@ -150,8 +150,8 @@ equation
 
 annotation(
     Icon(graphics = {Rectangle(lineColor = {170, 0, 0}, fillColor = {255, 255, 255}, pattern = LinePattern.None, fillPattern = FillPattern.Forward, extent = {{-68, 20}, {68, -20}}), Line(origin = {-79.5, 0}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Line(origin = {78.5, 0}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Text(origin = {-2, -46}, extent = {{-36, 18}, {36, -18}}, textString = "K=%K
-n=%n"), Text(origin = {1, 44}, textColor = {0, 0, 127}, extent = {{-59, 32}, {59, -32}}, textString = "%name", textStyle = {TextStyle.Bold})}),
-  Diagram(graphics));
+n=%n"), Text(origin = {1, 44}, textColor = {0, 0, 127}, extent = {{-59, 32}, {59, -32}}, textString = "%name", textStyle = {TextStyle.Bold})}, coordinateSystem(extent = {{-100, -100}, {100, 100}})),
+  Diagram(coordinateSystem(extent = {{-100, -100}, {100, 100}})));
 end ThermlConductanceN;
 
   model HeatCapacitorPoly

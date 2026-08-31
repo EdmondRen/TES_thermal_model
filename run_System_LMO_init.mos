@@ -1,0 +1,27 @@
+// Create and switch to a temp/build directory before compiling
+system("mkdir -p build");
+cd("build");
+
+loadModel(Modelica, {"4.1.0"});
+loadFile("../libTES.mo");
+loadFile("../System_LMO.mo");
+
+
+// Step 1: Run fast/coarse simulation to reach equilibrium
+simulate(System_LMO, 
+  startTime = 0.0, 
+  stopTime = 20, 
+  numberOfIntervals = 1000, 
+  tolerance = 1e-3,
+  outputFormat = "mat"
+);
+
+// Step 2: Rerun with fine resolution starting from the final values of Step 1
+// Using -iif (Import Initial File) and -iit (Import Initial Time) to reset startTime = 0.0
+// simulate(System_LMO, 
+//   startTime = 0.0, 
+//   stopTime = 0.1, 
+//   numberOfIntervals = 1000000, 
+//   tolerance = 1e-6, 
+//   simflags = "-iif System_LMO_res.mat -iit 100.0"
+// );
