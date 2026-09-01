@@ -11,9 +11,10 @@ loadFile("../System_LMO.mo");
 simulate(System_LMO, 
   startTime = 0.0, 
   stopTime = 10, 
-  numberOfIntervals = 1e6, 
+  numberOfIntervals = 1e5, 
   tolerance = 1e-6,
-  outputFormat = "mat"
+  outputFormat = "mat",
+  simflags = ""
 );
 
 //  simflags = "-overrideFile=../parameters/params_lmo_v1.txt"
