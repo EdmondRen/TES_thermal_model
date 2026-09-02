@@ -37,7 +37,7 @@ model System_LMO
     Placement(transformation(origin = {6, -32}, extent = {{-10, -10}, {10, 10}}, rotation = 90)));
   libTES.HeatCapacitorPoly wireBond2(m = m8, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {92, -30}, extent = {{-10, -10}, {10, 10}}, rotation = 90)));
-  Modelica.Electrical.Analog.Basic.Resistor RL(R(displayUnit = "mOhm") = Bias_R) annotation(
+  Modelica.Electrical.Analog.Basic.Resistor RL(R(displayUnit = "mOhm") = Bias_R, useHeatPort = false) annotation(
     Placement(transformation(origin = {-6, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Ground GND annotation(
     Placement(transformation(origin = {-32, 56}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
@@ -62,62 +62,63 @@ model System_LMO
   libTES.ThermlConductanceN g9(K = K9, n = 2) annotation(
     Placement(transformation(origin = {108, -16}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   // Parameters
+  // IMPORTANT: The parameters below are set to Evaluate=false to avoid them being evaluated during compilation. This is necessary because the model is compiled before the parameters are set in the simulation script.
   //  - Exitation
-  parameter Real Edep = 200000 "[eV], energy deposition";
-  parameter Real Edep_time = 1.00e-7 "[s], time for energy deposition";
-  parameter Real Edep_fractiontarget = 0.2 "Fraction of energy in target";
-  parameter Real Edep_falltimetarget = 0.3e-3 "Phonon thermalization time constant in target";
-  parameter Real Edep_falltimefilm = 0.3e-3 "Phonon thermalization time constant in film";
-  parameter Modelica.Units.SI.Time Edep_starttime = 10e-3 "Start time of energy deposition";
+  parameter Real Edep = 200000 "[eV], energy deposition" annotation(Evaluate=false);
+  parameter Real Edep_time = 1.00e-7 "[s], time for energy deposition" annotation(Evaluate=false);
+  parameter Real Edep_fractiontarget = 0.2 "Fraction of energy in target" annotation(Evaluate=false);
+  parameter Real Edep_falltimetarget = 0.3e-3 "Phonon thermalization time constant in target" annotation(Evaluate=false);
+  parameter Real Edep_falltimefilm = 0.3e-3 "Phonon thermalization time constant in film" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Time Edep_starttime = 10e-3 "Start time of energy deposition" annotation(Evaluate=false);
   //  - Electrical, bias
-  parameter Modelica.Units.SI.Current Bias_I = 36.1e-6 "Bias current";
-  parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh+Rp)";
-  parameter Modelica.Units.SI.Inductance Bias_L = 3.00e-7 "Bias circuit indutance";
+  parameter Modelica.Units.SI.Current Bias_I = 36.1e-6 "Bias current" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh+Rp)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Inductance Bias_L = 3.00e-7 "Bias circuit indutance" annotation(Evaluate=false);
   //  - Electrical, TES
-  parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance";
-  parameter Modelica.Units.SI.Temperature TES_Tc = 0.021 "TES critical temp.";
-  parameter Modelica.Units.SI.Temperature TES_Tinit = 0.021 "Initial guess of TES temperature";
-  parameter Real TES_alpha = 20 "TES alpha";
-  parameter Modelica.Units.SI.Mass TES_m = 6.53e-12 "TES mass";
-  parameter Real TES_a1 = 5.00e-2 "TES heat capacity linear term";
-  parameter Real TES_a3 = 9.24e-4 "TES heat capacity cubic term";
+  parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Temperature TES_Tc = 0.021 "TES critical temp." annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Temperature TES_Tinit = 0.021 "Initial guess of TES temperature" annotation(Evaluate=false);
+  parameter Real TES_alpha = 20 "TES alpha" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass TES_m = 6.53e-12 "TES mass" annotation(Evaluate=false);
+  parameter Real TES_a1 = 5.00e-2 "TES heat capacity linear term" annotation(Evaluate=false);
+  parameter Real TES_a3 = 9.24e-4 "TES heat capacity cubic term" annotation(Evaluate=false);
   //  - Thermal, conductance
-  parameter Real K1 = 1.16e-1   "Absorber -> Goldpad";
-  parameter Real K2 = 8.80e-6   "Goldpad -> Goldwirebond";
-  parameter Real K3 = 8.80e-6   "Goldwirebond -> Goldpad(TES1)";
-  parameter Real K4 = 0.1e-7    "Goldpad(TES1) -> TES Electron System";
-  parameter Real K5 = 7.99e-5*2000 "Goldpad(TES1) -> Si chip"; //
-  parameter Real K6 = 1.08e-5*5 "Si chip -> TES, electron-phonon coupling";
-  parameter Real K7 = 0.1e-7    "TES -> Goldpad(TES2)";
-  parameter Real K8 = 6.8e-8*0.1 "Goldpad(TES2) -> Meander";
-  parameter Real K9 = 5.64e-5   "Meander -> WireBond2";
-  parameter Real K10 = 5.64e-5  "WireBond2 -> bath";
-  parameter Real K11 = 1.45e-4*10 " Meander -> Si chip";
-  parameter Real K12 = 2.70e-6*4000 "Si chip -> Glue";
-  parameter Real K13 = 2.70e-6*4000 "Glue -> bath";
-  parameter Real K14 = 7.84e-8 "Absorber -> bath";
+  parameter Real K1 = 1.16e-1   "Absorber -> Goldpad" annotation(Evaluate=false);
+  parameter Real K2 = 8.80e-6   "Goldpad -> Goldwirebond" annotation(Evaluate=false);
+  parameter Real K3 = 8.80e-6   "Goldwirebond -> Goldpad(TES1)" annotation(Evaluate=false);
+  parameter Real K4 = 0.1e-7    "Goldpad(TES1) -> TES Electron System" annotation(Evaluate=false);
+  parameter Real K5 = 7.99e-5*2000 "Goldpad(TES1) -> Si chip" annotation(Evaluate=false);
+  parameter Real K6 = 1.08e-5 "Si chip -> TES, electron-phonon coupling" annotation(Evaluate=false);
+  parameter Real K7 = 0.1e-7    "TES -> Goldpad(TES2)" annotation(Evaluate=false);
+  parameter Real K8 = 6.8e-8 "Goldpad(TES2) -> Meander" annotation(Evaluate=false);
+  parameter Real K9 = 5.64e-5   "Meander -> WireBond2" annotation(Evaluate=false);
+  parameter Real K10 = 5.64e-5  "WireBond2 -> bath" annotation(Evaluate=false);
+  parameter Real K11 = 1.45e-4 " Meander -> Si chip" annotation(Evaluate=false);
+  parameter Real K12 = 2.70e-6*4000 "Si chip -> Glue" annotation(Evaluate=false);
+  parameter Real K13 = 2.70e-6*4000 "Glue -> bath" annotation(Evaluate=false);
+  parameter Real K14 = 7.84e-8 "Absorber -> bath" annotation(Evaluate=false);
   //  - Thermal, heat capacity
-  parameter Modelica.Units.SI.Mass m1 = 2.46e-2 "Absorber mass";
-  parameter Modelica.Units.SI.Mass m2 = 6.07e-7 "Gold (target gold pad)";
-  parameter Modelica.Units.SI.Mass m3 = 3.03e-8 "Gold (WireBond1)";
-  parameter Modelica.Units.SI.Mass m4 = 4.17e-10 "Gold (GoldPad2)";
-  parameter Modelica.Units.SI.Mass m5 = 8.38e-6 "Silicon chip";
-  parameter Modelica.Units.SI.Mass m6 = 3.97e-12 "Gold (GoldPadTES)";
-  parameter Modelica.Units.SI.Mass m7 = 7.59e-10 "Gold (Meander)";
-  parameter Modelica.Units.SI.Mass m8 = 4.73e-9 "Gold (WireBond2)";
-  parameter Modelica.Units.SI.Mass m9 = 2.67e-9 "Glue";
-  parameter Real a1_target = 6.95e-7;
-  parameter Real a3_target = 2.18e-6;
-  parameter Real a5_target = 0;
-  parameter Real a1_gold = 8.86e-3;
-  parameter Real a3_gold = 5.58e-3;
-  parameter Real a5_gold = 0;
-  parameter Real a1_silicon = 0;
-  parameter Real a3_silicon = 2.70e-4;
-  parameter Real a5_silicon = 0;
-  parameter Real a1_glue = 6.50e-3;
-  parameter Real a3_glue = 1.90e-2;
-  parameter Real a5_glue = 0;
+  parameter Modelica.Units.SI.Mass m1 = 2.46e-2 "Absorber mass" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m2 = 6.07e-7 "Gold (target gold pad)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m3 = 3.03e-8 "Gold (WireBond1)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m4 = 4.17e-10 "Gold (GoldPad2)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m5 = 8.38e-6 "Silicon chip" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m6 = 3.97e-12 "Gold (GoldPadTES)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m7 = 7.59e-10 "Gold (Meander)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m8 = 4.73e-9 "Gold (WireBond2)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m9 = 2.67e-9 "Glue" annotation(Evaluate=false);
+  parameter Real a1_target = 6.95e-7 annotation(Evaluate=false);
+  parameter Real a3_target = 2.18e-6 annotation(Evaluate=false);
+  parameter Real a5_target = 0 annotation(Evaluate=false);
+  parameter Real a1_gold = 8.86e-3 annotation(Evaluate=false);
+  parameter Real a3_gold = 5.58e-3 annotation(Evaluate=false);
+  parameter Real a5_gold = 0 annotation(Evaluate=false);
+  parameter Real a1_silicon = 0 annotation(Evaluate=false);
+  parameter Real a3_silicon = 2.70e-4 annotation(Evaluate=false);
+  parameter Real a5_silicon = 0 annotation(Evaluate=false);
+  parameter Real a1_glue = 6.50e-3 annotation(Evaluate=false);
+  parameter Real a3_glue = 1.90e-2 annotation(Evaluate=false);
+  parameter Real a5_glue = 0 annotation(Evaluate=false);
   // Results
   Real C1;
   Real C2;

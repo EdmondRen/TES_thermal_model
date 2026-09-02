@@ -1,0 +1,44 @@
+// Create and switch to a temp/build directory before compiling
+system("mkdir -p ../build");
+cd("../build");
+
+loadModel(Modelica, {"4.1.0"});
+loadFile("../libTES.mo");
+loadFile("../System_LMO.mo");
+
+
+// Set the linearization dump language to Python
+setCommandLineOptions("--linearizationDumpLanguage=python --tearingStrictness=veryStrict");
+
+
+buildModel(
+  System_LMO,
+  outputFormat = "mat",
+  fileNamePrefix = "System_LMO_exe"
+);
+
+
+//------------------------------
+// Or you can run the simulation instead of compiling the model. Uncomment the following lines to run the simulation directly.
+
+// Step 1: Run fast/coarse simulation to reach equilibrium
+// simulate(System_LMO, 
+//   startTime = 0.0, 
+//   stopTime = 10, 
+//   numberOfIntervals = 1e5, 
+//   tolerance = 1e-6,
+//   outputFormat = "mat",
+//   simflags = ""
+// );
+
+//  simflags = "-overrideFile=../parameters/params_lmo_v1.txt"
+
+// Step 2: Rerun with fine resolution starting from the final values of Step 1
+// Using -iif (Import Initial File) and -iit (Import Initial Time) to reset startTime = 0.0
+// simulate(System_LMO, 
+//   startTime = 0.0, 
+//   stopTime = 0.1, 
+//   numberOfIntervals = 1000000, 
+//   tolerance = 1e-6, 
+//   simflags = "-iif System_LMO_res.mat -iit 20.0"
+// );
