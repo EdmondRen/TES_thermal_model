@@ -1,4 +1,4 @@
-Edep=2.00e+02
+Edep=200e+03
 Edep_time=1.00e-07
 Edep_fractiontarget=0.2
 Edep_falltimetarget=0.3e-3

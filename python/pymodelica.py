@@ -107,3 +107,50 @@ def load_om_mat(filename):
     time = np.asarray(data_2[0, :]).squeeze()
 
     return time, variables
+
+
+
+
+def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900, display=True):
+    with open(filename, 'r') as file:
+        content = file.read()
+
+    # Replace the target text
+    # updated_content = content.replace(search_text, replace_text)
+    
+    ## Define for each system name the corresponding replacement rules
+    if system_name == "System_LMO":
+        for i in range(1, 14+1):
+            search_text = f">K=K{i} <"
+            replace_text = f">G={data[f'g{i}.G'][-1]:.3g} <"
+            content = content.replace(search_text, replace_text)
+        
+        for i in range(1, 9+1):
+            search_text = f">m=m{i} <"
+            replace_text = f">C={data[f'c{i}.C'][-1]:.3g} <"
+            content = content.replace(search_text, replace_text)
+            
+        search_text = f">  m=TES_m <"
+        replace_text = f">  C={data[f'c10.C'][-1]:.3g} <"
+        content = content.replace(search_text, replace_text)
+        
+        search_text = f">  Tc=TES_Tc <"
+        replace_text = f">  T={data[f'c10.T'][-1]:.3g} <"
+        content = content.replace(search_text, replace_text)
+        
+        
+
+    # Open the file in write mode to overwrite it
+    with open(output_filename, "w") as file:
+        file.write(content)
+        
+
+    if display:
+        from IPython.display import HTML
+        import time
+
+        return HTML(
+            f'<img src="{output_filename}?t={time.time()}" '
+            f'width="{width}" '
+            'style="background-color: #ffffff; padding: 16px; border-radius: 8px;">'
+        )

@@ -5,7 +5,7 @@ model System_LMO
     Placement(transformation(origin = {-72, 22}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow HeatSource1(T_ref(displayUnit = "K") = 0.1) annotation(
     Placement(transformation(origin = {-72, -2}, extent = {{-6, -6}, {6, 6}})));
-  libTES.TES2 tes(Rn = TES_Rn, T(start = TES_Tinit), Tc = TES_Tc, a1 = TES_a1, a3 = TES_a3, alpha0 = TES_alpha, m = TES_m) annotation(
+  libTES.TES2 c10(Rn = TES_Rn, T(start = TES_Tinit), Tc = TES_Tc, a1 = TES_a1, a3 = TES_a3, alpha0 = TES_alpha, m = TES_m) annotation(
     Placement(transformation(origin = {46, 44}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g1(K = K1, n = 5) annotation(
     Placement(transformation(origin = {-44, 22}, extent = {{-10, -10}, {10, 10}})));
@@ -19,24 +19,24 @@ model System_LMO
     Placement(transformation(origin = {26, -42}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g14(K = K14, n = 4) annotation(
     Placement(transformation(origin = {-58, -34}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
-  libTES.HeatCapacitorPoly target(m = m1, a1 = a1_target, a3 = a3_target, a5 = a5_target, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c1(m = m1, a1 = a1_target, a3 = a3_target, a5 = a5_target, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {-58, 36}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly goldPadTarget(m = m2, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c2(m = m2, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {-32, 36}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly wireBond1(m = m3, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c3(m = m3, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {-8, 36}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly goldPadTES1(m = m4, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c4(m = m4, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {26, 36}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly goldPadTES2(m = m6, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c6(m = m6, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {70, 36}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly silicon(m = m5, a1 = a1_silicon, a3 = a3_silicon, a5 = a5_silicon, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c5(m = m5, a1 = a1_silicon, a3 = a3_silicon, a5 = a5_silicon, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {68, 6}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly meander(m = m7, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c7(m = m7, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {94, 36}, extent = {{-10, -10}, {10, 10}})));
-  libTES.HeatCapacitorPoly glue(m = m9, a1 = a1_glue, a3 = a3_glue, a5 = a5_glue, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c9(m = m9, a1 = a1_glue, a3 = a3_glue, a5 = a5_glue, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {6, -32}, extent = {{-10, -10}, {10, 10}}, rotation = 90)));
-  libTES.HeatCapacitorPoly wireBond2(m = m8, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
-    Placement(transformation(origin = {92, -30}, extent = {{-10, -10}, {10, 10}}, rotation = 90)));
+  libTES.HeatCapacitorPoly c8(m = m8, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
+    Placement(transformation(origin = {90, -30}, extent = {{-10, -10}, {10, 10}}, rotation = 90)));
   Modelica.Electrical.Analog.Basic.Resistor RL(R(displayUnit = "mOhm") = Bias_R, useHeatPort = false) annotation(
     Placement(transformation(origin = {-6, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Ground GND annotation(
@@ -162,26 +162,26 @@ model System_LMO
 //  Modelica.Blocks.Sources.Pulse Pulse(amplitude = Edep*1.602e-19/Edep_time*Edep_thermalfraction, nperiod = 1, period = 1, startTime(displayUnit = "ms") = Edep_starttime, width = 100*Edep_time) annotation(
 //    Placement(transformation(origin = {-88, 22}, extent = {{-6, -6}, {6, 6}})));
 equation
-  C1 = target.C;
-  C2 = goldPadTarget.C;
-  C3 = wireBond1.C;
-  C4 = goldPadTES1.C;
-  C5 = silicon.C;
-  C6 = goldPadTES2.C;
-  C7 = meander.C;
-  C8 = wireBond2.C;
-  C9 = glue.C;
-  C10 = tes.C;
-  T1 = target.T;
-  T2 = goldPadTarget.T;
-  T3 = wireBond1.T;
-  T4 = goldPadTES1.T;
-  T5 = silicon.T;
-  T6 = goldPadTES2.T;
-  T7 = meander.T;
-  T8 = wireBond2.T;
-  T9 = glue.T;
-  T10 = tes.T;
+  C1 = c1.C;
+  C2 = c2.C;
+  C3 = c3.C;
+  C4 = c4.C;
+  C5 = c5.C;
+  C6 = c6.C;
+  C7 = c7.C;
+  C8 = c8.C;
+  C9 = c9.C;
+  C10 = c10.C;
+  T1 = c1.T;
+  T2 = c2.T;
+  T3 = c3.T;
+  T4 = c4.T;
+  T5 = c5.T;
+  T6 = c6.T;
+  T7 = c7.T;
+  T8 = c8.T;
+  T9 = c9.T;
+  T10 = c10.T;
   G1 = g1.G;
   G2 = g2.G;
   G3 = g3.G;
@@ -196,23 +196,23 @@ equation
   G12 = g12.G;
   G13 = g13.G;
   G14 = g14.G;
-  connect(wireBond1.port, g2.port_b) annotation(
+  connect(c3.port, g2.port_b) annotation(
     Line(points = {{-8, 26}, {-8, 22}}, color = {191, 0, 0}));
-  connect(g14.port_a, target.port) annotation(
+  connect(g14.port_a, c1.port) annotation(
     Line(points = {{-58, -24}, {-58, 26}}, color = {191, 0, 0}));
-  connect(g1.port_a, target.port) annotation(
+  connect(g1.port_a, c1.port) annotation(
     Line(points = {{-54, 22}, {-58, 22}, {-58, 26}}, color = {191, 0, 0}));
-  connect(g1.port_b, goldPadTarget.port) annotation(
+  connect(g1.port_b, c2.port) annotation(
     Line(points = {{-34, 22}, {-32, 22}, {-32, 26}}, color = {191, 0, 0}));
-  connect(HeatSource.port, target.port) annotation(
+  connect(HeatSource.port, c1.port) annotation(
     Line(points = {{-66, 22}, {-58, 22}, {-58, 26}}, color = {191, 0, 0}));
-  connect(wireBond1.port, g3.port_a) annotation(
+  connect(c3.port, g3.port_a) annotation(
     Line(points = {{-8, 26}, {-8, 22}, {-4, 22}}, color = {191, 0, 0}));
   connect(g12.port_b, g13.port_a) annotation(
     Line(points = {{26, -28}, {26, -32}}, color = {191, 0, 0}));
-  connect(glue.port, g13.port_a) annotation(
+  connect(c9.port, g13.port_a) annotation(
     Line(points = {{16, -32}, {26, -32}}, color = {191, 0, 0}));
-  connect(HeatSource1.port, goldPadTarget.port) annotation(
+  connect(HeatSource1.port, c2.port) annotation(
     Line(points = {{-66, -2}, {-32, -2}, {-32, 26}}, color = {191, 0, 0}));
   connect(GND.p, TESBias.p) annotation(
     Line(points = {{-26, 56}, {-18, 56}}, color = {0, 0, 255}));
@@ -222,21 +222,21 @@ equation
     Line(points = {{-4, 68}, {-6, 68}}, color = {0, 0, 255}));
   connect(RL.p, TESBias.n) annotation(
     Line(points = {{-6, 68}, {-18, 68}}, color = {0, 0, 255}));
-  connect(L.n, tes.p) annotation(
+  connect(L.n, c10.p) annotation(
     Line(points = {{8, 68}, {52, 68}, {52, 54}}, color = {0, 0, 255}));
-  connect(g2.port_a, goldPadTarget.port) annotation(
+  connect(g2.port_a, c2.port) annotation(
     Line(points = {{-28, 22}, {-32, 22}, {-32, 26}}, color = {191, 0, 0}));
   connect(g4.port_a, g3.port_b) annotation(
     Line(points = {{26, 22}, {16, 22}}, color = {191, 0, 0}));
-  connect(g3.port_b, goldPadTES1.port) annotation(
+  connect(g3.port_b, c4.port) annotation(
     Line(points = {{16, 22}, {26, 22}, {26, 26}}, color = {191, 0, 0}));
-  connect(tes.heatPort, g4.port_b) annotation(
+  connect(c10.heatPort, g4.port_b) annotation(
     Line(points = {{46, 34}, {46, 22}}, color = {191, 0, 0}));
   connect(g12.port_a, g5.port_b) annotation(
     Line(points = {{26, -8}, {26, -4}}, color = {191, 0, 0}));
   connect(g5.port_b, g6.port_b) annotation(
     Line(points = {{26, -4}, {46, -4}}, color = {191, 0, 0}));
-  connect(silicon.port, g6.port_b) annotation(
+  connect(c5.port, g6.port_b) annotation(
     Line(points = {{68, -4}, {46, -4}}, color = {191, 0, 0}));
   connect(g5.port_a, g4.port_a) annotation(
     Line(points = {{26, 16}, {26, 22}}, color = {191, 0, 0}));
@@ -244,28 +244,28 @@ equation
     Line(points = {{46, 16}, {46, 22}}, color = {191, 0, 0}));
   connect(g4.port_b, g7.port_a) annotation(
     Line(points = {{46, 22}, {50, 22}}, color = {191, 0, 0}));
-  connect(goldPadTES2.port, g7.port_b) annotation(
+  connect(c6.port, g7.port_b) annotation(
     Line(points = {{70, 26}, {70, 22}}, color = {191, 0, 0}));
   connect(g8.port_a, g7.port_b) annotation(
     Line(points = {{74, 22}, {70, 22}}, color = {191, 0, 0}));
-  connect(meander.port, g8.port_b) annotation(
+  connect(c7.port, g8.port_b) annotation(
     Line(points = {{94, 26}, {94, 22}}, color = {191, 0, 0}));
   connect(g13.port_b, g14.port_b) annotation(
     Line(points = {{26, -52}, {-58, -52}, {-58, -44}}, color = {191, 0, 0}));
   connect(fixedTemperature.port, g14.port_b) annotation(
     Line(points = {{-68, -52}, {-58, -52}, {-58, -44}}, color = {191, 0, 0}));
-  connect(tes.n, RL.n) annotation(
+  connect(c10.n, RL.n) annotation(
     Line(points = {{40, 54}, {40, 56}, {-6, 56}}, color = {0, 0, 255}));
   connect(g11.port_a, g8.port_b) annotation(
     Line(points = {{94, 16}, {94, 22}}, color = {191, 0, 0}));
-  connect(g11.port_b, silicon.port) annotation(
+  connect(g11.port_b, c5.port) annotation(
     Line(points = {{94, -4}, {68, -4}}, color = {191, 0, 0}));
   connect(g9.port_a, g8.port_b) annotation(
     Line(points = {{108, -6}, {108, 22}, {94, 22}}, color = {191, 0, 0}));
   connect(g10.port_a, g9.port_b) annotation(
     Line(points = {{108, -32}, {108, -26}}, color = {191, 0, 0}));
-  connect(wireBond2.port, g10.port_a) annotation(
-    Line(points = {{102, -30}, {108, -30}, {108, -32}}, color = {191, 0, 0}));
+  connect(c8.port, g10.port_a) annotation(
+    Line(points = {{100, -30}, {108, -30}, {108, -32}}, color = {191, 0, 0}));
   connect(g10.port_b, g13.port_b) annotation(
     Line(points = {{108, -52}, {26, -52}}, color = {191, 0, 0}));
   connect(edep_target.y, HeatSource.Q_flow) annotation(
@@ -274,7 +274,9 @@ equation
     Line(points = {{-84, -2}, {-78, -2}}, color = {0, 0, 127}));
   annotation(
     uses(Modelica(version = "4.1.0")),
-    Diagram(graphics = {Text(origin = {-60, 19}, rotation = 180, extent = {{-3, 2}, {3, -2}}, textString = "1", textStyle = {TextStyle.Bold}), Text(origin = {-30, 19}, extent = {{-4, 2}, {4, -2}}, textString = "2", textStyle = {TextStyle.Bold}), Text(origin = {-8, 19}, extent = {{-4, 2}, {4, -2}}, textString = "3", textStyle = {TextStyle.Bold}), Text(origin = {19, 17}, extent = {{-3, 3}, {3, -3}}, textString = "4", textStyle = {TextStyle.Bold}), Text(origin = {68, -9}, extent = {{-4, 3}, {4, -3}}, textString = "5", textStyle = {TextStyle.Bold}), Text(origin = {-59, -54}, extent = {{-5, 4}, {5, -4}}, textString = "0", textStyle = {TextStyle.Bold}), Text(origin = {99, 26}, extent = {{-3, 2}, {3, -2}}, textString = "7", textStyle = {TextStyle.Bold}), Text(origin = {112, -26}, extent = {{-4, 2}, {4, -2}}, textString = "8", textStyle = {TextStyle.Bold}), Text(origin = {21, -30}, extent = {{-3, 2}, {3, -2}}, textString = "9", textStyle = {TextStyle.Bold}), Line(origin = {71, 22}, points = {{-100, 0}, {37, 0}, {37, -75}}, color = {255, 170, 0}, thickness = 2), Text(origin = {72, 17}, extent = {{-4, 3}, {4, -3}}, textString = "6", textStyle = {TextStyle.Bold}), Text(origin = {51, 17}, extent = {{-5, 3}, {5, -3}}, textString = "10", textStyle = {TextStyle.Bold}), Rectangle(origin = {58, 24}, fillColor = {232, 232, 232}, pattern = LinePattern.DashDot, lineThickness = 0.5, extent = {{-44, 30}, {44, -30}})}, coordinateSystem(extent = {{-100, -100}, {120, 100}})),
+    Diagram(graphics = {Text(origin = {-59, -54}, extent = {{-5, 4}, {5, -4}}, textString = "0", textStyle = {TextStyle.Bold}), Line(origin = {71, 22}, points = {{-100, 0}, {37, 0}, {37, -75}}, color = {255, 170, 0}, thickness = 2), Rectangle(origin = {58, 24}, fillColor = {232, 232, 232}, pattern = LinePattern.DashDot, lineThickness = 0.5, extent = {{-44, 30}, {44, -30}}), Text(origin = {-30, 46}, extent = {{-10, 4}, {10, -4}}, textString = "GoldPad(Target)"), Text(origin = {-6, 46}, extent = {{-8, 2}, {8, -2}}, textString = "WireBond1"), Text(origin = {25, 47}, extent = {{-9, 3}, {9, -3}}, textString = "GoldPad(TES1)
++bondpad1"), Text(origin = {71, 47}, extent = {{-9, 3}, {9, -3}}, textString = "GoldPad(TES2)"), Text(origin = {95, 47}, extent = {{-9, 3}, {9, -3}}, textString = "Meander
++bondpad2"), Text(origin = {7, -21}, extent = {{-9, 3}, {9, -3}}, textString = "Glue"), Text(origin = {91, -19}, extent = {{-9, 3}, {9, -3}}, textString = "WireBond2"), Text(origin = {-57, 46}, extent = {{-7, 2}, {7, -2}}, textString = "Target", textStyle = {TextStyle.Bold}), Text(origin = {46, 59}, extent = {{-8, 3}, {8, -3}}, textString = "TES", textStyle = {TextStyle.Bold}), Text(origin = {-8, 16}, extent = {{-8, 2}, {8, -2}}, textString = "K2=K3"), Text(origin = {112, -30}, rotation = -90, extent = {{-8, 2}, {8, -2}}, textString = "K9=K10")}, coordinateSystem(extent = {{-100, -100}, {120, 100}})),
     Icon(coordinateSystem(extent = {{-100, -100}, {120, 100}})),
     version = "",
     experiment(StartTime = 0, StopTime = 0.1, Tolerance = 0.5e-07, Interval = 1e-06),

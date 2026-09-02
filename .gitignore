@@ -3,3 +3,6 @@ build
 # python compiled files
 *.pyc
 __pycache__
+
+
+temp_image.svg
