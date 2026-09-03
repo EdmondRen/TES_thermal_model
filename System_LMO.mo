@@ -5,7 +5,7 @@ model System_LMO
     Placement(transformation(origin = {-72, 22}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow HeatSource1(T_ref(displayUnit = "K") = 0.1) annotation(
     Placement(transformation(origin = {-72, -2}, extent = {{-6, -6}, {6, 6}})));
-  libTES.TES2 c10(Rn = TES_Rn, T(start = TES_Tinit), Tc = TES_Tc, a1 = TES_a1, a3 = TES_a3, alpha0 = TES_alpha, m = TES_m) annotation(
+  libTES.TES2 c1(Rn = TES_Rn, T(start = TES_Tinit), Tc = TES_Tc, a1 = TES_a1, a3 = TES_a3, alpha0 = TES_alpha, beta0 = TES_beta, I0 = TES_I0, m = TES_m) annotation(
     Placement(transformation(origin = {46, 44}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g1(K = K1, n = 5) annotation(
     Placement(transformation(origin = {-44, 22}, extent = {{-10, -10}, {10, 10}})));
@@ -19,7 +19,7 @@ model System_LMO
     Placement(transformation(origin = {26, -42}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   libTES.ThermlConductanceN g14(K = K14, n = 4) annotation(
     Placement(transformation(origin = {-58, -34}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
-  libTES.HeatCapacitorPoly c1(m = m1, a1 = a1_target, a3 = a3_target, a5 = a5_target, T(start = TES_Tinit)) annotation(
+  libTES.HeatCapacitorPoly c10(m = m10, a1 = a1_target, a3 = a3_target, a5 = a5_target, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {-58, 36}, extent = {{-10, -10}, {10, 10}})));
   libTES.HeatCapacitorPoly c2(m = m2, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {-32, 36}, extent = {{-10, -10}, {10, 10}})));
@@ -38,13 +38,13 @@ model System_LMO
   libTES.HeatCapacitorPoly c8(m = m8, a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, T(start = TES_Tinit)) annotation(
     Placement(transformation(origin = {90, -30}, extent = {{-10, -10}, {10, 10}}, rotation = 90)));
   Modelica.Electrical.Analog.Basic.Resistor RL(R(displayUnit = "mOhm") = Bias_R, useHeatPort = false) annotation(
-    Placement(transformation(origin = {-6, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
+    Placement(transformation(origin = {-20, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Ground GND annotation(
-    Placement(transformation(origin = {-32, 56}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
+    Placement(transformation(origin = {-46, 56}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Inductor L(L = Bias_L, i(start = Bias_I*0.3)) annotation(
     Placement(transformation(origin = {2, 68}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Electrical.Analog.Sources.ConstantCurrent TESBias(I = Bias_I) annotation(
-    Placement(transformation(origin = {-18, 62}, extent = {{-6, -6}, {6, 6}}, rotation = 90)));
+    Placement(transformation(origin = {-32, 62}, extent = {{-6, -6}, {6, 6}}, rotation = 90)));
   libTES.ThermlConductanceN g4(K = K4, n = 2) annotation(
     Placement(transformation(origin = {36, 22}, extent = {{-10, -10}, {10, 10}})));
   libTES.ThermlConductanceN g5(K = K5, n = 5) annotation(
@@ -74,11 +74,14 @@ model System_LMO
   parameter Modelica.Units.SI.Current Bias_I = 36.1e-6 "Bias current" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh+Rp)" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Inductance Bias_L = 3.00e-7 "Bias circuit indutance" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Inductance Bias_C = 20e-12 "Bias circuit capacitance" annotation(Evaluate=false);
   //  - Electrical, TES
   parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Temperature TES_Tc = 0.021 "TES critical temp." annotation(Evaluate=false);
   parameter Modelica.Units.SI.Temperature TES_Tinit = 0.021 "Initial guess of TES temperature" annotation(Evaluate=false);
   parameter Real TES_alpha = 20 "TES alpha" annotation(Evaluate=false);
+  parameter Real TES_beta = 1 "TES beta" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Current TES_I0 = 5e-6 "TES Current where beta is evaluated" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Mass TES_m = 6.53e-12 "TES mass" annotation(Evaluate=false);
   parameter Real TES_a1 = 5.00e-2 "TES heat capacity linear term" annotation(Evaluate=false);
   parameter Real TES_a3 = 9.24e-4 "TES heat capacity cubic term" annotation(Evaluate=false);
@@ -98,7 +101,7 @@ model System_LMO
   parameter Real K13 = 2.70e-6*4000 "Glue -> bath" annotation(Evaluate=false);
   parameter Real K14 = 7.84e-8 "Absorber -> bath" annotation(Evaluate=false);
   //  - Thermal, heat capacity
-  parameter Modelica.Units.SI.Mass m1 = 2.46e-2 "Absorber mass" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m10 = 2.46e-2 "Absorber mass" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Mass m2 = 6.07e-7 "Gold (target gold pad)" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Mass m3 = 3.03e-8 "Gold (WireBond1)" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Mass m4 = 4.17e-10 "Gold (GoldPad2)" annotation(Evaluate=false);
@@ -159,10 +162,12 @@ model System_LMO
     Placement(transformation(origin = {-90, 22}, extent = {{-6, -6}, {6, 6}})));
   libTES.SourceExp edep_film(outMax = Edep*1.6e-19*(1-Edep_fractiontarget)/Edep_falltimefilm, fallTimeConst = Edep_falltimefilm, offset = 0, startTime = Edep_starttime) annotation(
     Placement(transformation(origin = {-90, -2}, extent = {{-6, -6}, {6, 6}})));
-//  Modelica.Blocks.Sources.Pulse Pulse(amplitude = Edep*1.602e-19/Edep_time*Edep_thermalfraction, nperiod = 1, period = 1, startTime(displayUnit = "ms") = Edep_starttime, width = 100*Edep_time) annotation(
-//    Placement(transformation(origin = {-88, 22}, extent = {{-6, -6}, {6, 6}})));
+  //  Modelica.Blocks.Sources.Pulse Pulse(amplitude = Edep*1.602e-19/Edep_time*Edep_thermalfraction, nperiod = 1, period = 1, startTime(displayUnit = "ms") = Edep_starttime, width = 100*Edep_time) annotation(
+  //    Placement(transformation(origin = {-88, 22}, extent = {{-6, -6}, {6, 6}})));
+  Modelica.Electrical.Analog.Basic.Capacitor CL(C = Bias_C)  annotation(
+    Placement(transformation(origin = {-10, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
 equation
-  C1 = c1.C;
+  C1 = c10.C;
   C2 = c2.C;
   C3 = c3.C;
   C4 = c4.C;
@@ -171,8 +176,8 @@ equation
   C7 = c7.C;
   C8 = c8.C;
   C9 = c9.C;
-  C10 = c10.C;
-  T1 = c1.T;
+  C10 = c1.C;
+  T1 = c10.T;
   T2 = c2.T;
   T3 = c3.T;
   T4 = c4.T;
@@ -181,7 +186,7 @@ equation
   T7 = c7.T;
   T8 = c8.T;
   T9 = c9.T;
-  T10 = c10.T;
+  T10 = c1.T;
   G1 = g1.G;
   G2 = g2.G;
   G3 = g3.G;
@@ -198,13 +203,13 @@ equation
   G14 = g14.G;
   connect(c3.port, g2.port_b) annotation(
     Line(points = {{-8, 26}, {-8, 22}}, color = {191, 0, 0}));
-  connect(g14.port_a, c1.port) annotation(
+  connect(g14.port_a, c10.port) annotation(
     Line(points = {{-58, -24}, {-58, 26}}, color = {191, 0, 0}));
-  connect(g1.port_a, c1.port) annotation(
+  connect(g1.port_a, c10.port) annotation(
     Line(points = {{-54, 22}, {-58, 22}, {-58, 26}}, color = {191, 0, 0}));
   connect(g1.port_b, c2.port) annotation(
     Line(points = {{-34, 22}, {-32, 22}, {-32, 26}}, color = {191, 0, 0}));
-  connect(HeatSource.port, c1.port) annotation(
+  connect(HeatSource.port, c10.port) annotation(
     Line(points = {{-66, 22}, {-58, 22}, {-58, 26}}, color = {191, 0, 0}));
   connect(c3.port, g3.port_a) annotation(
     Line(points = {{-8, 26}, {-8, 22}, {-4, 22}}, color = {191, 0, 0}));
@@ -215,14 +220,14 @@ equation
   connect(HeatSource1.port, c2.port) annotation(
     Line(points = {{-66, -2}, {-32, -2}, {-32, 26}}, color = {191, 0, 0}));
   connect(GND.p, TESBias.p) annotation(
-    Line(points = {{-26, 56}, {-18, 56}}, color = {0, 0, 255}));
+    Line(points = {{-40, 56}, {-32, 56}}, color = {0, 0, 255}));
   connect(TESBias.p, RL.n) annotation(
-    Line(points = {{-18, 56}, {-6, 56}}, color = {0, 0, 255}));
+    Line(points = {{-32, 56}, {-20, 56}}, color = {0, 0, 255}));
   connect(L.p, RL.p) annotation(
-    Line(points = {{-4, 68}, {-6, 68}}, color = {0, 0, 255}));
+    Line(points = {{-4, 68}, {-20, 68}}, color = {0, 0, 255}));
   connect(RL.p, TESBias.n) annotation(
-    Line(points = {{-6, 68}, {-18, 68}}, color = {0, 0, 255}));
-  connect(L.n, c10.p) annotation(
+    Line(points = {{-20, 68}, {-32, 68}}, color = {0, 0, 255}));
+  connect(L.n, c1.p) annotation(
     Line(points = {{8, 68}, {52, 68}, {52, 54}}, color = {0, 0, 255}));
   connect(g2.port_a, c2.port) annotation(
     Line(points = {{-28, 22}, {-32, 22}, {-32, 26}}, color = {191, 0, 0}));
@@ -230,7 +235,7 @@ equation
     Line(points = {{26, 22}, {16, 22}}, color = {191, 0, 0}));
   connect(g3.port_b, c4.port) annotation(
     Line(points = {{16, 22}, {26, 22}, {26, 26}}, color = {191, 0, 0}));
-  connect(c10.heatPort, g4.port_b) annotation(
+  connect(c1.heatPort, g4.port_b) annotation(
     Line(points = {{46, 34}, {46, 22}}, color = {191, 0, 0}));
   connect(g12.port_a, g5.port_b) annotation(
     Line(points = {{26, -8}, {26, -4}}, color = {191, 0, 0}));
@@ -254,8 +259,8 @@ equation
     Line(points = {{26, -52}, {-58, -52}, {-58, -44}}, color = {191, 0, 0}));
   connect(fixedTemperature.port, g14.port_b) annotation(
     Line(points = {{-68, -52}, {-58, -52}, {-58, -44}}, color = {191, 0, 0}));
-  connect(c10.n, RL.n) annotation(
-    Line(points = {{40, 54}, {40, 56}, {-6, 56}}, color = {0, 0, 255}));
+  connect(c1.n, RL.n) annotation(
+    Line(points = {{40, 54}, {40, 56}, {-20, 56}}, color = {0, 0, 255}));
   connect(g11.port_a, g8.port_b) annotation(
     Line(points = {{94, 16}, {94, 22}}, color = {191, 0, 0}));
   connect(g11.port_b, c5.port) annotation(
@@ -272,6 +277,10 @@ equation
     Line(points = {{-84, 22}, {-78, 22}}, color = {0, 0, 127}));
   connect(edep_film.y, HeatSource1.Q_flow) annotation(
     Line(points = {{-84, -2}, {-78, -2}}, color = {0, 0, 127}));
+  connect(CL.p, RL.p) annotation(
+    Line(points = {{-10, 68}, {-20, 68}}, color = {0, 0, 255}));
+  connect(CL.n, RL.n) annotation(
+    Line(points = {{-10, 56}, {-20, 56}}, color = {0, 0, 255}));
   annotation(
     uses(Modelica(version = "4.1.0")),
     Diagram(graphics = {Text(origin = {-59, -54}, extent = {{-5, 4}, {5, -4}}, textString = "0", textStyle = {TextStyle.Bold}), Line(origin = {71, 22}, points = {{-100, 0}, {37, 0}, {37, -75}}, color = {255, 170, 0}, thickness = 2), Rectangle(origin = {58, 24}, fillColor = {232, 232, 232}, pattern = LinePattern.DashDot, lineThickness = 0.5, extent = {{-44, 30}, {44, -30}}), Text(origin = {-30, 46}, extent = {{-10, 4}, {10, -4}}, textString = "GoldPad(Target)"), Text(origin = {-6, 46}, extent = {{-8, 2}, {8, -2}}, textString = "WireBond1"), Text(origin = {25, 47}, extent = {{-9, 3}, {9, -3}}, textString = "GoldPad(TES1)

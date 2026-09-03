@@ -60,7 +60,10 @@ package libTES
     //           heatPort --- [ thermal C, T ]
     parameter Modelica.Units.SI.Resistance Rn;
     parameter Modelica.Units.SI.Temperature Tc;
+    parameter Modelica.Units.SI.Current I0 "Current where beta0 is evaluated";
     parameter Real alpha0;
+    parameter Real beta0 = 1;
+  
     // Heat capacity
     parameter Modelica.Units.SI.Mass m(displayUnit = "ug") = 1;
     parameter Real a1 = 0;
@@ -79,7 +82,7 @@ package libTES
     p.i = i;
     n.i = -i;
 // TES Resistance. Joule heating generated internally
-    R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc));
+    R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc) + (abs(i)-I0)*beta0/I0);
     v = R*i;
     P_Joule = v*i;
 // Heat capacity (temperature dependent)
@@ -91,8 +94,8 @@ package libTES
     annotation(
       Diagram(graphics = {Rectangle(origin = {-60, 0}, extent = {{-40, 40}, {40, -40}})}),
       Icon(graphics = {Text(origin = {14, 0}, extent = {{-46, 30}, {46, -30}}, textString = "Rn=%Rn
-  Tc=%Tc
-  alpha0=%alpha0
+  Tc=%Tc, I0=%I0
+  α=%alpha0, β=%beta0
   m=%m
   a1=%a1
   a3=%a3

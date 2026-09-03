@@ -2,7 +2,7 @@
 
 Modelica models for thermal and electrothermal simulations of Transition Edge Sensor (TES) detectors. The repository contains a reusable component library plus system-level examples for TES biasing, Joule heating, nonlinear thermal links, temperature-dependent heat capacities, and detector response to pulsed energy input.
 
-## Repository Contents
+## 1. Repository Contents
 
 - `libTES.mo` - local Modelica package containing reusable TES thermal-model components.
 - `System_1block.mo` - one-block TES system using `libTES.TES2` and nonlinear thermal conductance.
@@ -14,12 +14,15 @@ Modelica models for thermal and electrothermal simulations of Transition Edge Se
 
 All Modelica source files currently live at the repository root. The reusable components are organized inside `libTES.mo`; the system models instantiate them with qualified names such as `libTES.TES2` and `libTES.ThermlConductanceN`.
 
+The Modelica models give you a time-domain simulation of the full non-linear model (including all nonlinearities in resistance, heat capacitance and conductance).
+As for noise and complex impedance analysis, you need to generate a linearized model around the equilibrium point.
 
-## Requirements
+
+### 1.1 Requirements
 
 Use OpenModelica/OMEdit with the Modelica Standard Library. Follow the installation guide on https://openmodelica.org/. If OpenModelica reports that the Modelica package is missing, install Modelica 4.1.0 from OMEdit's package manager or through an OpenModelica script.
 
-## Running In OMEdit (GUI)
+## 2. Running In OMEdit (GUI)
 
 Load the local library before loading any system model:
 
@@ -38,7 +41,7 @@ The model annotations store simulation settings so they travel with the files.
 - If OMEdit reports a parser error around `addClassAnnotation`, restart OMEdit or clear the scripting input/session, then reload `libTES.mo` and the target system model.
 - If a parameter is reported as having neither a value nor a start value, check the parameter declarations in the system model and any parameter file you are using.
 
-## Running From Command Line
+## 3. Running From Command Line
 
 Because the system models depend on the local `libTES` package, load `libTES.mo` before checking or simulating a system model. A direct command such as `omc System_LMO.mo` may fail with `Class libTES... not found` if the library is not already loaded.
 
@@ -84,7 +87,7 @@ subprocess.run(
 
 Simulation from `omc` may create generated C files, object files, an executable, logs, XML/JSON metadata, and result files such as `System_LMO_res.mat` in the working directory. These are build and simulation artifacts; rerun the simulation to regenerate them when needed. The two provided mos scripts will make a build folder and save all the generated file inside. The result file is in matlab format. A python loader using scipy is included in `pymodelica.py`.
 
-## Modeling Notes
+## 4. Modeling Notes
 
 
 `libTES.mo` defines the reusable models used by the system examples:
@@ -125,6 +128,127 @@ cp = a0 + a1*T + a3*T^3 + a5*T^5;
 
 `System_LMO.mo` exposes summary result variables named `A_C*`, `A_T*`, and `A_G*` for selected heat capacities, temperatures, and thermal conductances.
 
+## 5. Analyzing Linearized Model
+
+A linearized model could be generated after reaching equilibrium. The model need to be compiled with `--linearizationDumpLanguage=python` option, see the example in `scripts/compile_System_LMO_init.mos`. The generated modle is in python format. The complex impedance and noise could be evaluated from the linearized model.
+
+For our thermal models, the generated equations are given in the format of standard **state-space equations** for a dynamic system:
+
+$$
+\dot{x} = Ax + Bu
+$$
+
+$$
+y = Cx + Du
+$$
+
+Here:
+
+* **$x$** = **state vector** — the internal variables that describe the system's current state.
+* **$u$** = **input vector** — the external inputs or controls applied to the system.
+* **$y$** = **output vector** — the quantities you observe or want to calculate from the system.
+* **$A$** = state/system matrix.
+* **$B$** = input matrix, describing how \(u\) affects the states.
+* **$C$** = output matrix, describing how the states \(x\) contribute to \(y\).
+* **$D$** = feedthrough matrix, describing any **direct** effect of \(u\) on \(y\).
+specifically:
+
+$$
+\boxed{u=\text{system input}}
+\qquad
+\boxed{y=\text{system output}}
+$$
+
+For TES current equation, $u$ is the **applied voltage**, $x$ is **TES current**, and there is no equation for $y$ (C=D=0).
+
+The name of variables are given as stateVars, e.g., for our LMO system model 
+
+    stateVars  = ['CL_v','L_i','c1_T','c10_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T','c8_T','c9_T']
+
+The first term is the voltage across the parasitic capacitance of the bias circuit, which is almost identical to the voltage across TES, $V_{TES}$. The second term is the current through the inductor, which is equal to the TES current $I_{TES}$. Let's assume TES is HeatCapacitance c1. A complete set of equations will be like:
+
+$$
+\frac{d}{dt} 
+
+\begin{pmatrix}
+\Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_{1} \\ \Delta T_2 \\ \vdots \\ \Delta T_n
+\end{pmatrix}
+
+=
+
+\begin{pmatrix}
+ -1/R_LC_L &  -1/C_L  & 0 & ... & 0 \\
+1/L & -R_L(1+\beta)/L &  -\alpha V_{bias}/T_cL & ... & 0 \\
+0 & (2+\beta)V_{bias}/C_{1} & G_{1,2}/C_1 & ... & G_{1,n}/C_1 \\
+0  & 0  & G_{2,2}/C_2 & ... & G_{2,n}/C_1  \\
+\vdots  & \vdots  & \vdots  & \vdots  & \vdots \\
+0 & 0  & G_{n,2}/C_2 & ... & G_{n,n}/C_1
+\end{pmatrix}
+
+\begin{pmatrix}
+\Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_1  \\ \Delta T_2 \\ \vdots \\ \Delta T_n
+\end{pmatrix}
++ 
+\begin{pmatrix}
+\delta V_{TES,ext} \\ \delta V_{bias}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
+\end{pmatrix}
+
+$$
+
+
+in which  (TODO: explain all variables). The big matrix is matrix A in the linearized python model, B = identity matrix, and C = D = 0.
+
+
+We can solve these equations in Fourier space easily. After Fourier transform, d/dt becomes $i\omega$. The coefficient matrix becomes $H(\omega) = A - diag(i\omega, ... , i\omega)$
+
+
+$$
+0=
+\begin{pmatrix}
+ -1/R_LC_L -i\omega  &  -1/C_L  & 0 & ... & 0 \\
+1/L & -R_L(1+\beta)/L -i\omega &  -\alpha V_{bias}/T_cL & ... & 0 \\
+0 & (2+\beta)V_{bias}/C_{1} & G_{1,2}/C_1 -i\omega & ... & G_{1,n}/C_1 \\
+0  & 0  & G_{2,2}/C_2 & ... & G_{2,n}/C_2  \\
+\vdots  & \vdots  & \vdots  & \vdots  & \vdots \\
+0 & 0  & G_{n,2}/C_2 & ... & G_{n,n}/C_n -i\omega
+\end{pmatrix}
+
+\begin{pmatrix}
+\Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_1  \\ \Delta T_2 \\ \vdots \\ \Delta T_n
+\end{pmatrix}
++ 
+\begin{pmatrix}
+\delta V_{TES,ext} \\ \delta V_{bias}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
+\end{pmatrix}
+
+$$
+
+
+
+
+### 5.1 Complex impedance
+
+We set all excitations to zero except for $\delta V_{bias} = 1$ and solve for $\Delta I_{TES}$. The solution can be obtained by directly inverting the H matrix. Since the excitation is model-independent, the same code can be used to calculate complex impedance when model changes. 
+
+$$
+dIdV(\omega) = H(\omega)^{-1}\begin{pmatrix}
+0 \\ 1/L \\ 0 \\ 0 \\ \vdots \\ 0
+\end{pmatrix}
+$$
+
+
+### 5.2 Noise
+
+The same concept applies to noise, you just need to set the appropriate excitation of each noise source. We will go through each of the noise sources. 
+
+#### 5.2.1 TES Johnson noise
+
+#### 5.2.2 Load resistor Johnson noise
+
+#### 5.2.3 Thermal fluctuation noise
+
+#### 5.2.4 Readout noise
+
 ## Modeled Systems
 
 ### LMO
@@ -134,6 +258,8 @@ cp = a0 + a1*T + a3*T^3 + a5*T^5;
 ## Contributing
 
 Keep model filenames aligned with model names when adding new system models. Prefer `Modelica.Units.SI` types for physical quantities, preserve existing experiment annotations, and document parameter choices that come from detector calibration or measurement data.
+
+
 
 
 
