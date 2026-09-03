@@ -177,12 +177,12 @@ $$
 =
 
 \begin{pmatrix}
- -1/R_LC_L &  -1/C_L  & 0 & ... & 0 \\
-1/L & -R_L(1+\beta)/L &  -\alpha V_{bias}/T_cL & ... & 0 \\
-0 & (2+\beta)V_{bias}/C_{1} & G_{1,2}/C_1 & ... & G_{1,n}/C_1 \\
-0  & 0  & G_{2,2}/C_2 & ... & G_{2,n}/C_1  \\
+ -1/R_LC_L &  -1/C_L  & 0 & 0 &... & 0 \\
+1/L & -R_L(1+\beta)/L &  -\alpha V_{bias}/T_cL & 0 & ... & 0 \\
+0 & (2+\beta)V_{bias}/C_{1} & G_{1,1}/C_1 & G_{1,2}/C_1 & ... & G_{1,n}/C_1 \\
+0  & 0  & G_{2,1}/C_2 & G_{2,2}/C_2 & ... & G_{2,n}/C_1  \\
 \vdots  & \vdots  & \vdots  & \vdots  & \vdots \\
-0 & 0  & G_{n,2}/C_2 & ... & G_{n,n}/C_1
+0 & 0  & G_{n,1}/C_n & G_{n,2}/C_n & ... & G_{n,n}/C_1
 \end{pmatrix}
 
 \begin{pmatrix}
@@ -199,18 +199,18 @@ $$
 in which  (TODO: explain all variables). The big matrix is matrix A in the linearized python model, B = identity matrix, and C = D = 0.
 
 
-We can solve these equations in Fourier space easily. After Fourier transform, d/dt becomes $i\omega$. The coefficient matrix becomes $H(\omega) = A - diag(i\omega, ... , i\omega)$
+We can solve these equations in Fourier space easily. After Fourier transform, d/dt becomes $i\omega$, and the coefficient matrix becomes $H(\omega) = A - diag(i\omega, ... , i\omega)$
 
 
 $$
 0=
 \begin{pmatrix}
- -1/R_LC_L -i\omega  &  -1/C_L  & 0 & ... & 0 \\
+ -1/R_LC_L -i\omega  &  -1/C_L  & 0 &0 & ... & 0 \\
 1/L & -R_L(1+\beta)/L -i\omega &  -\alpha V_{bias}/T_cL & ... & 0 \\
-0 & (2+\beta)V_{bias}/C_{1} & G_{1,2}/C_1 -i\omega & ... & G_{1,n}/C_1 \\
-0  & 0  & G_{2,2}/C_2 & ... & G_{2,n}/C_2  \\
+0 & (2+\beta)V_{bias}/C_{1} & G_{1,1}/C_1 -i\omega & G_{1,2}/C_1 & ... & G_{1,n}/C_1 \\
+0  & 0  & G_{2,1}/C_2 & G_{2,2}/C_2 -i\omega& ... & G_{2,n}/C_2  \\
 \vdots  & \vdots  & \vdots  & \vdots  & \vdots \\
-0 & 0  & G_{n,2}/C_2 & ... & G_{n,n}/C_n -i\omega
+0 & 0  & G_{n,1}/C_n & G_{n,2}/C_n & ... & G_{n,n}/C_n -i\omega
 \end{pmatrix}
 
 \begin{pmatrix}
@@ -228,12 +228,13 @@ $$
 
 ### 5.1 Complex impedance
 
-We set all excitations to zero except for $\delta V_{bias} = 1$ and solve for $\Delta I_{TES}$. The solution can be obtained by directly inverting the H matrix. Since the excitation is model-independent, the same code can be used to calculate complex impedance when model changes. 
+We set all excitations to zero except for $\delta V_{bias} = 1$ and solve for $\Delta I_{TES}$. The solution can be obtained by directly inverting the H matrix, multiply by the excitation vector and take the second component. Since the excitation is model-independent, the same code can be used to calculate complex impedance when model changes. 
 
 $$
-dIdV(\omega) = H(\omega)^{-1}\begin{pmatrix}
+dIdV(\omega) = \left[ H(\omega)^{-1}\begin{pmatrix}
 0 \\ 1/L \\ 0 \\ 0 \\ \vdots \\ 0
 \end{pmatrix}
+\right]_2
 $$
 
 
