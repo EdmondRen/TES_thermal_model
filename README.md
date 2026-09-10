@@ -107,7 +107,9 @@ Simulation from `omc` may create generated C files, object files, an executable,
 
 ### 4.2 Convention
 
-1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always use index 1 for TES heat capacity.** 
+**The conventions must be followed for the analysis code to work**
+1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always name TES c1.** 
+2. For TES bias circuit, always use a current bias with a shunt resistor named `RL`, a loop capacitance named `CL`, and a loop inductance named `L`. 
 
 ## 5. Analyzing Linearized Model
 
@@ -146,7 +148,7 @@ The name of variables are given as stateVars, e.g., for our LMO system model
 
     stateVars  = ['CL_v','L_i','c1_T','c10_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T','c8_T','c9_T']
 
-The first term is the voltage across the parasitic capacitance of the bias circuit, which is almost identical to the voltage across TES, $V_{TES}$. The second term is the current through the inductor, which is equal to the TES current $I_{TES}$. Let's assume we followed the convention and TES is HeatCapacitance c1. A complete set of equations will be like:
+The first term $V_{C_L}$ is the voltage across the parasitic capacitance of the bias circuit, which is almost identical to the voltage across TES. The second term is the current through the inductor, which is equal to the TES current $I_{TES}$. Let's assume we followed the convention and TES is HeatCapacitance c1. A complete set of equations will be like:
 
 $$
 \frac{d}{dt} 
@@ -167,7 +169,7 @@ $$
 \end{pmatrix}
 
 \begin{pmatrix}
-\Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_1  \\ \Delta T_2 \\ \vdots \\ \Delta T_n
+\Delta V_{C_L} \\ \Delta I_{TES} \\ \Delta T_1  \\ \Delta T_2 \\ \vdots \\ \Delta T_n
 \end{pmatrix}
 + 
 \begin{pmatrix}
@@ -195,7 +197,7 @@ $$
 \end{pmatrix}
 
 \begin{pmatrix}
-\Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_1  \\ \Delta T_2 \\ \vdots \\ \Delta T_n
+\Delta V_{C_L} \\ \Delta I_{TES} \\ \Delta T_1  \\ \Delta T_2 \\ \vdots \\ \Delta T_n
 \end{pmatrix}
 + 
 \begin{pmatrix}
