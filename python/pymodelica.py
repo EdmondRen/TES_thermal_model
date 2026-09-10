@@ -1,8 +1,138 @@
 import importlib.util
+import re
 from pathlib import Path
 
 import numpy as np
 from scipy.io import loadmat
+
+
+_CONNECT_RE = re.compile(r"\bconnect\s*\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)", re.DOTALL)
+_COMPONENT_RE = re.compile(
+    r"\b(?P<type>(?:[\w]+\.)*(?:ThermlConductanceN|HeatCapacitorPoly|TES2|FixedTemperature))\s+"
+    r"(?P<name>[A-Za-z_]\w*)\b"
+)
+
+
+class _UnionFind:
+    def __init__(self):
+        self.parent = {}
+
+    def find(self, item):
+        if item not in self.parent:
+            self.parent[item] = item
+            return item
+
+        root = item
+        while self.parent[root] != root:
+            root = self.parent[root]
+
+        while self.parent[item] != item:
+            item, self.parent[item] = self.parent[item], root
+
+        return root
+
+    def union(self, left, right):
+        left_root = self.find(left)
+        right_root = self.find(right)
+
+        if left_root != right_root:
+            self.parent[right_root] = left_root
+
+
+def _strip_modelica_comments(text):
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    return re.sub(r"//.*", "", text)
+
+
+def _connector_name(connector):
+    return re.sub(r"\s+", "", connector)
+
+
+def _parse_indexed_name(name, prefix):
+    match = re.fullmatch(rf"{re.escape(prefix)}([1-9]\d*)", name)
+    return int(match.group(1)) if match else None
+
+
+def parse_thermal_conductance_connections(modelica_file):
+    """
+    Parse a Modelica model and return heat-capacity endpoints for each g*.
+
+    The parser expects the repository naming convention:
+      - nonlinear thermal conductances are named g1, g2, ...
+      - heat capacities are named c1, c2, ...
+
+    Each returned value is a tuple of HeatCapacitorPoly/TES2 indices connected
+    to (port_a, port_b). Connections to fixedTemperature.port are reported as
+    index 0.
+    """
+
+    text = Path(modelica_file).read_text()
+    text = _strip_modelica_comments(text)
+
+    conductances = {}
+    capacities = {}
+    fixed_temperatures = set()
+
+    for match in _COMPONENT_RE.finditer(text):
+        component_type = match.group("type").split(".")[-1]
+        name = match.group("name")
+
+        if component_type == "ThermlConductanceN":
+            index = _parse_indexed_name(name, "g")
+            if index is not None:
+                conductances[name] = index
+
+        elif component_type in ("HeatCapacitorPoly", "TES2"):
+            index = _parse_indexed_name(name, "c")
+            if index is not None:
+                capacities[name] = index
+
+        elif component_type == "FixedTemperature":
+            fixed_temperatures.add(name)
+
+    uf = _UnionFind()
+
+    for left, right in _CONNECT_RE.findall(text):
+        uf.union(_connector_name(left), _connector_name(right))
+
+    node_endpoints = {}
+
+    for capacity_name, index in capacities.items():
+        for port in ("port", "heatPort"):
+            connector = f"{capacity_name}.{port}"
+            root = uf.find(connector)
+            node_endpoints.setdefault(root, set()).add(index)
+
+    for fixed_name in fixed_temperatures:
+        connector = f"{fixed_name}.port"
+        root = uf.find(connector)
+        node_endpoints.setdefault(root, set()).add(0)
+
+    def resolve_endpoint(conductance_name, port):
+        connector = f"{conductance_name}.{port}"
+        root = uf.find(connector)
+        endpoints = node_endpoints.get(root, set())
+
+        if not endpoints:
+            raise ValueError(
+                f"Cannot resolve {connector} to a c* port or fixedTemperature.port"
+            )
+
+        if len(endpoints) > 1:
+            endpoint_list = ", ".join(str(endpoint) for endpoint in sorted(endpoints))
+            raise ValueError(f"Ambiguous endpoints for {connector}: {endpoint_list}")
+
+        return next(iter(endpoints))
+
+    return {
+        index: (
+            resolve_endpoint(conductance_name, "port_a"),
+            resolve_endpoint(conductance_name, "port_b"),
+        )
+        for conductance_name, index in sorted(
+            conductances.items(), key=lambda item: item[1]
+        )
+    }
 
 
 def _load_linearized_model(linearized_model):
@@ -41,6 +171,68 @@ def _load_linearized_model(linearized_model):
     )
 
 
+def _linearized_state_permutation(state_vars):
+    state_vars = list(state_vars)
+    state_positions = {name: i for i, name in enumerate(state_vars)}
+
+    if len(state_positions) != len(state_vars):
+        duplicates = sorted(
+            {name for name in state_vars if state_vars.count(name) > 1}
+        )
+        raise ValueError(f"Duplicate state variable names: {duplicates}")
+
+    required_states = ("CL_v", "L_i")
+    missing_states = [
+        name for name in required_states
+        if name not in state_positions
+    ]
+
+    if missing_states:
+        raise ValueError(f"Missing required state variables: {missing_states}")
+
+    c_states = []
+    unknown_states = []
+
+    for name in state_vars:
+        if name in required_states:
+            continue
+
+        match = re.fullmatch(r"c([1-9]\d*)_T", name)
+        if match is None:
+            unknown_states.append(name)
+        else:
+            c_states.append((int(match.group(1)), name))
+
+    if unknown_states:
+        raise ValueError(f"Unknown state variable names: {unknown_states}")
+
+    c_indices = [index for index, _ in c_states]
+    duplicate_indices = sorted(
+        {index for index in c_indices if c_indices.count(index) > 1}
+    )
+
+    if duplicate_indices:
+        raise ValueError(f"Duplicate c*_T state indices: {duplicate_indices}")
+
+    sorted_state_vars = list(required_states) + [
+        name for _, name in sorted(c_states)
+    ]
+
+    return [state_positions[name] for name in sorted_state_vars], sorted_state_vars
+
+
+def _identity_permutation(variable_names, expected_count, axis_name):
+    variable_names = list(variable_names)
+
+    if len(variable_names) != expected_count:
+        raise ValueError(
+            f"Expected {expected_count} {axis_name} variables, "
+            f"got {len(variable_names)}"
+        )
+
+    return list(range(expected_count)), variable_names
+
+
 def load_linearized_model(linearized_model):
     """
     Normalize an OpenModelica Python linearized_model() result.
@@ -71,6 +263,17 @@ def load_linearized_model(linearized_model):
     B = np.asarray(B, dtype=float).reshape((n, m)) if m else np.empty((n, 0))
     C = np.asarray(C, dtype=float).reshape((p, n)) if p else np.empty((0, n))
     D = np.asarray(D, dtype=float).reshape((p, m)) if p and m else np.empty((p, m))
+
+    state_permutation, state_vars = _linearized_state_permutation(state_vars)
+    input_permutation, input_vars = _identity_permutation(input_vars, m, "input")
+    output_permutation, output_vars = _identity_permutation(output_vars, p, "output")
+
+    x0 = x0[state_permutation]
+    u0 = u0[input_permutation]
+    A = A[np.ix_(state_permutation, state_permutation)]
+    B = B[np.ix_(state_permutation, input_permutation)]
+    C = C[np.ix_(output_permutation, state_permutation)]
+    D = D[np.ix_(output_permutation, input_permutation)]
 
     return {
         "n": n,
@@ -128,7 +331,7 @@ class TESModel:
         return Z_model
 
 
-def load_om_mat(filename):
+def load(filename):
     """
     # File format
     # https://openmodelica.org/doc/OpenModelicaUsersGuide/latest/technical_details.html

@@ -89,44 +89,25 @@ Simulation from `omc` may create generated C files, object files, an executable,
 
 ## 4. Modeling Notes
 
+### 4.1 Component Library
 
 `libTES.mo` defines the reusable models used by the system examples:
 
 - `libTES.TES` - TES component with electrical pins, one thermal port, tanh transition resistance, Joule heating, and constant heat capacity.
+    - $R = R_n/2 * (1. + \tanh((T - T_c) * \alpha/T_c - (I - I_0) * \beta/T_c))$
+    - $C * \dot{T} = P_{Joule} + heatPort.Q_{flow}$
 - `libTES.TES2` - Almost the same as `TES` but with temperature dependent heat capacity.
-
-
-```modelica
-R = Rn/2 * (1. + tanh((T - Tc) * alpha0/Tc));
-```
-
-The resulting Joule power is coupled into the thermal balance. For constant heat capacity:
-
-```modelica
-C * der(T) = P_Joule + heatPort.Q_flow;
-```
-
-For temperature-dependent heat capacity in `libTES.TES2`:
-
-```modelica
-cp = a1*T + a3*T^3;
-m * cp * der(T) = P_Joule + heatPort.Q_flow;
-```
+    - $c_p = a_1*T + a_3*T^3$
+    - $m * c_p * \dot{T} = P_{Joule} + heatPort.Q_{flow}$
 
 - `libTES.ThermlConductanceN` - nonlinear thermal conductance between two heat ports:
-
-```modelica
-Q_flow = K * (port_a.T^n - port_b.T^n);
-```
-
+    - $Q_{flow} = K * (T_a^n - T_b^n)$
 - `libTES.HeatCapacitorPoly` - thermal mass with polynomial specific heat capacity:
+    - $c_p = a_0 + a_1*T + a_3*T^3 + a_5*T^5$
 
-```modelica
-cp = a0 + a1*T + a3*T^3 + a5*T^5;
-```
+### 4.2 Convention
 
-
-`System_LMO.mo` exposes summary result variables named `A_C*`, `A_T*`, and `A_G*` for selected heat capacities, temperatures, and thermal conductances.
+1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always use index 1 for TES heat capacity.** 
 
 ## 5. Analyzing Linearized Model
 
@@ -165,7 +146,7 @@ The name of variables are given as stateVars, e.g., for our LMO system model
 
     stateVars  = ['CL_v','L_i','c1_T','c10_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T','c8_T','c9_T']
 
-The first term is the voltage across the parasitic capacitance of the bias circuit, which is almost identical to the voltage across TES, $V_{TES}$. The second term is the current through the inductor, which is equal to the TES current $I_{TES}$. Let's assume TES is HeatCapacitance c1. A complete set of equations will be like:
+The first term is the voltage across the parasitic capacitance of the bias circuit, which is almost identical to the voltage across TES, $V_{TES}$. The second term is the current through the inductor, which is equal to the TES current $I_{TES}$. Let's assume we followed the convention and TES is HeatCapacitance c1. A complete set of equations will be like:
 
 $$
 \frac{d}{dt} 
@@ -190,7 +171,7 @@ $$
 \end{pmatrix}
 + 
 \begin{pmatrix}
-\delta V_{TES,ext} \\ \delta V_{bias}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
+\delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
 \end{pmatrix}
 
 $$
@@ -218,7 +199,7 @@ $$
 \end{pmatrix}
 + 
 \begin{pmatrix}
-\delta V_{TES,ext} \\ \delta V_{bias}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
+\delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
 \end{pmatrix}
 
 $$
