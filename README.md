@@ -87,6 +87,40 @@ subprocess.run(
 
 Simulation from `omc` may create generated C files, object files, an executable, logs, XML/JSON metadata, and result files such as `System_LMO_res.mat` in the working directory. These are build and simulation artifacts; rerun the simulation to regenerate them when needed. The two provided mos scripts will make a build folder and save all the generated file inside. The result file is in matlab format. A python loader using scipy is included in `pymodelica.py`.
 
+### Python Analysis Helpers
+
+`python/pymodelica.py` contains helper functions for reading OpenModelica output and analyzing linearized TES models:
+
+- `load(filename)` reads an OpenModelica MATLAB `.mat` result file and returns `(time, variables)`, where `variables` maps Modelica result names such as `c1.T`, `RL.R`, and `g1.G` to NumPy arrays.
+- `load_linearized_model(linearized_model)` normalizes a Python linearization dump produced with `--linearizationDumpLanguage=python`. It returns NumPy arrays for `x0`, `u0`, `A`, `B`, `C`, and `D`, and reorders states to `CL_v`, `L_i`, then `c1_T`, `c2_T`, ... by numeric heat-capacity index.
+- `parse_thermal_conductance_connections(modelica_file)` reads the full Modelica source and maps each nonlinear conductance `g*` to the heat-capacity endpoints connected to `port_a` and `port_b`. A fixed-temperature bath endpoint is reported as `0`.
+- `TESModel` combines the linearized model, full Modelica source, and steady-state simulation results to compute frequency-domain transfer functions, complex impedance, phonon/Johnson/readout noise contributions, and equivalent input noise.
+- `mod_svg(...)` writes a copy of `System_LMO.svg` with selected simulated values substituted into the diagram labels.
+
+Example workflow:
+
+```python
+import pymodelica
+
+time, simulation_results = pymodelica.load("build/System_LMO_res_init.mat")
+
+model = pymodelica.TESModel(
+    "build/System_LMO_init_linearized.py",
+    "System_LMO.mo",
+    simulation_results,
+    config={"L": simulation_results["L.L"][-1], "RL": simulation_results["RL.R"][-1]},
+    f_min=1,
+    f_max=100e3,
+    points=1000,
+)
+
+z_tes = model.get_impedance()
+dIdP = model.get_dIdP(index_cinput=-1)
+noise_current, frequencies = model.get_noise(RL_temperature=0.2)
+```
+
+The Python helpers rely on the naming conventions in Section 4.2. In particular, the linearized state names must include `CL_v` and `L_i`, and heat-capacity temperatures must be named `cN_T` so they can be sorted numerically instead of lexicographically.
+
 ## 4. Modeling Notes
 
 ### 4.1 Component Library

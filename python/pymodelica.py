@@ -15,10 +15,45 @@ _COMPONENT_RE = re.compile(
 
 
 class _UnionFind:
+    """
+    Minimal disjoint-set data structure for grouping connected Modelica ports.
+
+    The connection parser treats every connector name as an item in an
+    undirected graph. A union operation joins two connectors from one
+    ``connect(a, b)`` statement, and ``find`` returns the representative for
+    the connected component that contains a connector.
+
+    Attributes
+    ----------
+    parent : dict
+        Mapping from each seen item to its parent item. Root items point to
+        themselves.
+    """
+
     def __init__(self):
+        """
+        Create an empty union-find container.
+
+        Items are inserted lazily the first time they are passed to ``find`` or
+        ``union``.
+        """
         self.parent = {}
 
     def find(self, item):
+        """
+        Return the representative element for ``item``.
+
+        Parameters
+        ----------
+        item : hashable
+            Connector or node identifier to look up.
+
+        Returns
+        -------
+        hashable
+            Canonical representative for the connected component containing
+            ``item``.
+        """
         if item not in self.parent:
             self.parent[item] = item
             return item
@@ -33,6 +68,14 @@ class _UnionFind:
         return root
 
     def union(self, left, right):
+        """
+        Join the connected components containing ``left`` and ``right``.
+
+        Parameters
+        ----------
+        left, right : hashable
+            Items that should be treated as connected.
+        """
         left_root = self.find(left)
         right_root = self.find(right)
 
@@ -41,15 +84,59 @@ class _UnionFind:
 
 
 def _strip_modelica_comments(text):
+    """
+    Remove Modelica block and line comments from source text.
+
+    Parameters
+    ----------
+    text : str
+        Raw Modelica source text.
+
+    Returns
+    -------
+    str
+        Source text with ``/* ... */`` block comments and ``//`` line comments
+        removed.
+    """
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
     return re.sub(r"//.*", "", text)
 
 
 def _connector_name(connector):
+    """
+    Normalize a connector expression for graph matching.
+
+    Parameters
+    ----------
+    connector : str
+        Connector text captured from a Modelica ``connect`` statement.
+
+    Returns
+    -------
+    str
+        Connector name with all whitespace removed.
+    """
     return re.sub(r"\s+", "", connector)
 
 
 def _parse_indexed_name(name, prefix):
+    """
+    Parse a repository-style indexed component name.
+
+    Parameters
+    ----------
+    name : str
+        Component name such as ``c1`` or ``g14``.
+    prefix : str
+        Required prefix, for example ``"c"`` for heat capacities or ``"g"``
+        for conductance links.
+
+    Returns
+    -------
+    int or None
+        Positive 1-based index if ``name`` matches ``prefix`` followed by an
+        integer with no leading zero, otherwise ``None``.
+    """
     match = re.fullmatch(rf"{re.escape(prefix)}([1-9]\d*)", name)
     return int(match.group(1)) if match else None
 
@@ -65,6 +152,26 @@ def parse_thermal_conductance_connections(modelica_file):
     Each returned value is a tuple of HeatCapacitorPoly/TES2 indices connected
     to (port_a, port_b). Connections to fixedTemperature.port are reported as
     index 0.
+
+    Parameters
+    ----------
+    modelica_file : str or pathlib.Path
+        Path to the full Modelica model file whose component declarations and
+        ``connect`` equations should be inspected.
+
+    Returns
+    -------
+    dict[int, tuple[int, int]]
+        Mapping from conductance index to the heat-capacity or bath endpoints
+        connected to that conductance. For example, ``{3: (1, 4)}`` means
+        ``g3.port_a`` is connected to ``c1`` and ``g3.port_b`` is connected to
+        ``c4``. Endpoint ``0`` means a ``FixedTemperature.port`` bath.
+
+    Raises
+    ------
+    ValueError
+        If a conductance port cannot be resolved to a single heat capacity or
+        fixed-temperature endpoint.
     """
 
     text = Path(modelica_file).read_text()
@@ -110,6 +217,27 @@ def parse_thermal_conductance_connections(modelica_file):
         node_endpoints.setdefault(root, set()).add(0)
 
     def resolve_endpoint(conductance_name, port):
+        """
+        Resolve one conductance port to a capacity index or bath sentinel.
+
+        Parameters
+        ----------
+        conductance_name : str
+            Component name such as ``g1``.
+        port : {"port_a", "port_b"}
+            Conductance connector to resolve.
+
+        Returns
+        -------
+        int
+            Heat-capacity/TES index, or ``0`` for a fixed-temperature bath.
+
+        Raises
+        ------
+        ValueError
+            If the conductance port has no known endpoint or is connected to
+            more than one endpoint.
+        """
         connector = f"{conductance_name}.{port}"
         root = uf.find(connector)
         endpoints = node_endpoints.get(root, set())
@@ -142,6 +270,27 @@ def _load_linearized_model(linearized_model):
 
     linearized_model may be the tuple itself, a callable, an imported module, or
     a path to a Python file containing linearized_model().
+
+    Parameters
+    ----------
+    linearized_model : tuple, callable, module, str, or pathlib.Path
+        OpenModelica linearization result, or an object that can produce one.
+        Python file paths are imported dynamically and must define a
+        ``linearized_model()`` function.
+
+    Returns
+    -------
+    tuple
+        Raw OpenModelica tuple containing dimensions, operating points,
+        state-space matrices, and variable names.
+
+    Raises
+    ------
+    ValueError
+        If a file path cannot be imported or does not define
+        ``linearized_model()``.
+    TypeError
+        If ``linearized_model`` is not one of the supported input forms.
     """
 
     if isinstance(linearized_model, tuple):
@@ -173,6 +322,32 @@ def _load_linearized_model(linearized_model):
 
 
 def _linearized_state_permutation(state_vars):
+    """
+    Build the canonical state ordering for TES linearized models.
+
+    OpenModelica may emit heat-capacity states lexicographically, for example
+    ``c10_T`` before ``c2_T``. This helper validates the state names and returns
+    a permutation that orders states as ``CL_v``, ``L_i``, then ``c1_T``,
+    ``c2_T``, ... by numeric heat-capacity index.
+
+    Parameters
+    ----------
+    state_vars : sequence of str
+        State variable names from the generated linearized model.
+
+    Returns
+    -------
+    tuple[list[int], list[str]]
+        Index permutation into the original state order and the corresponding
+        sorted state-name list.
+
+    Raises
+    ------
+    ValueError
+        If state names are duplicated, required electrical states are missing,
+        unknown state names are present, or duplicate ``c*_T`` indices are
+        found.
+    """
     state_vars = list(state_vars)
     state_positions = {name: i for i, name in enumerate(state_vars)}
 
@@ -223,6 +398,28 @@ def _linearized_state_permutation(state_vars):
 
 
 def _identity_permutation(variable_names, expected_count, axis_name):
+    """
+    Validate an axis variable list and return its identity permutation.
+
+    Parameters
+    ----------
+    variable_names : sequence of str
+        Input or output variable names from the generated linearized model.
+    expected_count : int
+        Expected number of names for this axis.
+    axis_name : str
+        Label used in error messages, for example ``"input"`` or ``"output"``.
+
+    Returns
+    -------
+    tuple[list[int], list[str]]
+        Identity permutation and the validated variable-name list.
+
+    Raises
+    ------
+    ValueError
+        If the number of names does not match ``expected_count``.
+    """
     variable_names = list(variable_names)
 
     if len(variable_names) != expected_count:
@@ -240,6 +437,32 @@ def load_linearized_model(linearized_model):
 
     Returns a dictionary with NumPy arrays for x0, u0, A, B, C, and D plus the
     state, input, and output variable name lists.
+
+    The state order is normalized to the repository convention ``CL_v``,
+    ``L_i``, then heat-capacity temperatures ``c1_T``, ``c2_T``, ... . Input
+    and output variable lists are validated against the dimensions reported by
+    OpenModelica, but their order is otherwise preserved.
+
+    Parameters
+    ----------
+    linearized_model : tuple, callable, module, str, or pathlib.Path
+        Raw linearization tuple, a callable returning that tuple, an imported
+        module exposing ``linearized_model()``, or a generated Python file path.
+
+    Returns
+    -------
+    dict
+        Dictionary with integer dimensions ``n``, ``m``, ``p``; arrays ``x0``,
+        ``u0``, ``A``, ``B``, ``C``, and ``D``; and variable-name lists
+        ``stateVars``, ``inputVars``, and ``outputVars``.
+
+    Raises
+    ------
+    ValueError
+        If the generated names do not match the TES naming convention or array
+        dimensions.
+    TypeError
+        If ``linearized_model`` cannot be loaded by ``_load_linearized_model``.
     """
 
     (
@@ -293,8 +516,23 @@ def load_linearized_model(linearized_model):
 
 
 class TESModel:
+    """
+    Frequency-domain analysis wrapper for a linearized TES thermal model.
+
+    ``TESModel`` combines three sources of information:
+
+    * the OpenModelica-generated Python linearized model,
+    * the full Modelica source used to recover conductance endpoints, and
+    * steady-state simulation results used for component values.
+
+    It precomputes the complex frequency grid and inverse system matrices used
+    by impedance, responsivity, and noise calculations.
+    """
+
     def __init__(self, linearized_model_filename, full_model_filename, simulation_results, config, f_min = 1, f_max = 100e3, points = 1000):
         """
+        Create a TES frequency-domain model.
+
         config: dict
             Dictionary containing the configuration parameters for the analysis. List of parameters:
             "L": Inductance value of the TES circuit in Henrys (H).
@@ -303,6 +541,40 @@ class TESModel:
         We need to follow some conventions for the model to work properly. The first state variable must be the voltage across the TES, the second state variable must be the current through the TES. The third state variable must be the temperature of the TES. The rest of the state variables are the temperatures of each heat capacity cN, where N is the 1-based index of the heat capacity following increasing order. Example:
         
         ['CL_v','L_i','c1_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T','c8_T','c9_T','c10_T']
+
+        Parameters
+        ----------
+        linearized_model_filename : str, pathlib.Path, tuple, callable, or module
+            Generated Python linearized model, or another supported input form
+            accepted by ``load_linearized_model``.
+        full_model_filename : str or pathlib.Path
+            Full Modelica source file used to map each ``g*`` thermal
+            conductance to its two connected heat-capacity endpoints.
+        simulation_results : dict[str, array-like]
+            Variables loaded from an OpenModelica result file by ``load``.
+            The last value of entries such as ``RL.R``, ``CL.C``, ``L.L``,
+            ``c*.C``, ``g*.K``, and ``g*.n`` is used as the operating point.
+        config : dict
+            Dictionary containing the configuration parameters for the
+            analysis. Currently stored on the instance for caller use; expected
+            keys include ``"L"`` and ``"RL"`` for inductance and load/shunt
+            resistance.
+        f_min, f_max : float, optional
+            Minimum and maximum frequencies in Hz for the logarithmic analysis
+            grid.
+        points : int, optional
+            Number of frequency samples between ``f_min`` and ``f_max``.
+
+        Attributes
+        ----------
+        frequencies : numpy.ndarray
+            Log-spaced frequency grid in Hz.
+        iw : numpy.ndarray
+            Complex angular frequencies, ``2j * pi * frequencies``.
+        model : dict
+            Normalized state-space model returned by ``load_linearized_model``.
+        matrices_inv : dict
+            Precomputed inverse matrix for each complex angular frequency.
         """
         self.simulation_results = simulation_results
         self.config = config
@@ -339,6 +611,17 @@ class TESModel:
         ---
         iw: complex float, complex frequency
         A: array of complex float, matrix of the system of equations
+
+        Parameters
+        ----------
+        iw : complex
+            Complex angular frequency, normally ``2j * pi * f``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex matrix ``-A + iw * I`` used to solve the Fourier-domain
+            perturbation equations.
         """
         A = self.model["A"]
         N = - A + iw*np.eye(A.shape[0]) # Compute eigenvectors
@@ -348,6 +631,22 @@ class TESModel:
     def get_solution_full(self, external_input, norm = True):
         """
         Compute the solution of the system of equations of iw*X = A*X + external_input
+
+        Parameters
+        ----------
+        external_input : array-like
+            Excitation vector with one entry per state. When ``norm`` is true,
+            entries are interpreted as physical perturbations such as voltage
+            or power and multiplied by ``external_input_coeff``.
+        norm : bool, optional
+            If true, scale ``external_input`` by the operating-point
+            coefficients before solving. If false, use ``external_input``
+            directly as the right-hand side.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex response array with shape ``(len(frequencies), nparams)``.
         """
         d_out = []
         for iw in self.iw:
@@ -360,6 +659,22 @@ class TESModel:
         return d_out
         
     def get_solution_single(self, index_input, index_output):
+        """
+        Solve the response from one input coordinate to one output coordinate.
+
+        Parameters
+        ----------
+        index_input : int
+            Zero-based state-space coordinate to excite. The excitation uses
+            the corresponding ``external_input_coeff`` value.
+        index_output : int
+            Zero-based state-space coordinate to read from the solved response.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex transfer function sampled on ``self.frequencies``.
+        """
         d_out = []
         for iw in self.iw:
             d_in = np.zeros(self.nparams)  # Pulse to Absorber
@@ -369,16 +684,56 @@ class TESModel:
         return d_out
     
     def get_dIdP(self, index_cinput = -1):
+        """
+        Compute TES current responsivity to a power input on a heat capacity.
+
+        Parameters
+        ----------
+        index_cinput : int, optional
+            Heat-capacity selector using the current implementation's index
+            conversion. Negative values are converted with
+            ``self.nparams - 1 + index_cinput``; positive values are converted
+            with ``index_cinput - 1``. This preserves the existing behavior,
+            including the historical default ``-1``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex ``dI/dP`` transfer function on ``self.frequencies``. The
+            value is also stored as ``self.dIdP``.
+        """
         ind_c = self.nparams - 1 + index_cinput if index_cinput < 0 else index_cinput - 1 # for example, -1 -> len - 2; 2 -> 1
         self.dIdP = self.get_solution_single(index_input=ind_c, index_output=self.index_tes_i)
         return self.dIdP
     
     def get_dIdV(self):
+        """
+        Compute TES current responsivity to external voltage excitation.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex ``dI/dV`` transfer function on ``self.frequencies``. The
+            value is also stored as ``self.dIdV``.
+        """
         self.dIdV = self.get_solution_single(index_input=self.index_cload_v, index_output=self.index_tes_i)
         return self.dIdV
         
             
     def get_impedance(self):
+        """
+        Compute the complex TES impedance from voltage and current response.
+
+        The method excites the external voltage input, solves for the TES
+        current response, subtracts the inductive voltage contribution, and
+        returns ``dV / dI``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex impedance sampled on ``self.frequencies``. The value is
+            also stored as ``self.Z_TES``.
+        """
         d_Vext = np.zeros(self.nparams)
         d_Vext[0] = 1
         solution = self.get_solution_full(d_Vext, norm = True)
@@ -404,6 +759,20 @@ class TESModel:
         ---
         noise: float
             phonon noise
+
+        Parameters
+        ----------
+        K : float
+            Conductance constant in ``P = K * (T1^n - T2^n)``.
+        T1, T2 : float
+            Temperatures of the two connected components in K.
+        n : float
+            Thermal conductance exponent.
+
+        Returns
+        -------
+        float
+            Thermal fluctuation noise amplitude in W/sqrt(Hz).
         """
         noise = np.sqrt(2.* scipy.constants.k * n * K * (T1**(n+1) + T2**(n+1)))
         return noise
@@ -427,6 +796,35 @@ class TESModel:
             Exponent of the flicker noise, below the corner frequency. The noise increases as 1/f^gamma
         index_cinput: int
             Zero-based index of the heat capacity where the input power is applied. If negative, it counts from the end of the list. For example, -1 means the last heat capacity, -2 means the second to last, etc. For example, if the list of parameters is ['CL_v','L_i','c1_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T'], then index_cinput = -1 means c17, index_cinput = -2 means c9, index_cinput = 2 means c1, index_cinput = 3 means c2 etc.
+
+        Parameters
+        ----------
+        RL_temperature : float or None, optional
+            Temperature of the shunt/load resistor for external Johnson noise.
+            If omitted, the TES operating temperature ``c1.T`` is used.
+        noise_electronics : float, optional
+            White readout current noise in A/sqrt(Hz).
+        noise_flicker_corner : float, optional
+            Flicker-noise corner frequency in Hz.
+        noise_flicker_gamma : float, optional
+            Power-law exponent for the flicker contribution below the corner.
+        index_cinput : int, optional
+            Heat-capacity selector used to convert current noise to equivalent
+            input power through ``dI/dP``. The value is passed directly to
+            ``get_dIdP`` and follows that method's index conversion.
+
+        Returns
+        -------
+        tuple[dict[str, numpy.ndarray], numpy.ndarray]
+            Dictionary of current-noise contributions keyed by source name, and
+            the frequency grid in Hz.
+
+        Side Effects
+        ------------
+        Stores intermediate and derived noise arrays on the instance, including
+        ``noise_source_vectors``, ``noise_current``, ``noise_power``, and
+        ``noise_power_square_sum``. Prints the estimated sigma energy
+        resolution in eV.
         """
         # Initialize the noise source vectors
         self.noise_source_vectors = {}
@@ -506,8 +904,24 @@ def load(filename):
     """
     # File format
     # https://openmodelica.org/doc/OpenModelicaUsersGuide/latest/technical_details.html
+
+    Load an OpenModelica MATLAB ``.mat`` result file.
+
+    The loader decodes the OpenModelica ``name`` matrix and ``dataInfo`` table,
+    applies negated aliases, and returns every readable variable as a NumPy
+    array. Variables stored in ``data_1`` are typically parameters and
+    constants; variables stored in ``data_2`` are time-series results.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Path to the OpenModelica result file.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, dict[str, numpy.ndarray]]
+        Time array and a dictionary mapping Modelica variable names to values.
     """
-    
     mat = loadmat(filename, chars_as_strings=False)
 
     name_matrix = mat["name"]
@@ -522,6 +936,23 @@ def load(filename):
           - integer character codes
 
         Also handles either matrix orientation.
+
+        Parameters
+        ----------
+        char_matrix : numpy.ndarray
+            Character matrix from the OpenModelica ``name`` field.
+        n_variables : int
+            Number of variable names expected from ``dataInfo``.
+
+        Returns
+        -------
+        list[str]
+            Decoded variable names.
+
+        Raises
+        ------
+        ValueError
+            If the matrix orientation cannot be matched to ``n_variables``.
         """
 
         # Determine which axis represents variables
@@ -612,6 +1043,37 @@ def load(filename):
 
 
 def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900, display=True):
+    """
+    Write an SVG diagram with simulated LMO values substituted into labels.
+
+    For ``system_name == "System_LMO"``, placeholder labels such as ``K=K1``
+    and ``m=m1`` are replaced with the final conductance ``g*.G``, heat
+    capacity ``c*.C``, and TES temperature values from a simulation result
+    dictionary. The original SVG is read from ``filename`` and the modified SVG
+    is written to ``output_filename``.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Source SVG file.
+    output_filename : str or pathlib.Path
+        Destination SVG file to write.
+    data : dict[str, array-like]
+        Simulation variables, usually the second return value from ``load``.
+    system_name : str, optional
+        System-specific replacement rule set. Currently only ``"System_LMO"``
+        has replacement rules.
+    width : int, optional
+        Display width in pixels for the returned notebook HTML.
+    display : bool, optional
+        If true, return an ``IPython.display.HTML`` image tag for notebook
+        display. If false, only write the output file.
+
+    Returns
+    -------
+    IPython.display.HTML or None
+        Notebook display object when ``display`` is true, otherwise ``None``.
+    """
     with open(filename, 'r') as file:
         content = file.read()
 
