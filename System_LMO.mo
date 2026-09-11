@@ -167,7 +167,7 @@ model System_LMO
   Modelica.Electrical.Analog.Basic.Capacitor CL(C = Bias_C)  annotation(
     Placement(transformation(origin = {-10, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
 equation
-  C1 = c10.C;
+  C1 = c1.C;
   C2 = c2.C;
   C3 = c3.C;
   C4 = c4.C;
@@ -176,8 +176,8 @@ equation
   C7 = c7.C;
   C8 = c8.C;
   C9 = c9.C;
-  C10 = c1.C;
-  T1 = c10.T;
+  C10 = c10.C;
+  T1 = c1.T;
   T2 = c2.T;
   T3 = c3.T;
   T4 = c4.T;
@@ -186,7 +186,7 @@ equation
   T7 = c7.T;
   T8 = c8.T;
   T9 = c9.T;
-  T10 = c1.T;
+  T10 = c10.T;
   G1 = g1.G;
   G2 = g2.G;
   G3 = g3.G;

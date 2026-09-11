@@ -1,11 +1,649 @@
 import importlib.util
 import re
+import warnings
 from pathlib import Path
 
 import numpy as np
 import scipy
 from scipy.io import loadmat
 
+
+
+    
+    
+def get_impulse_response(A, input_index, T=None, input_scale=1.0):
+    """
+    Calculates the impulse response of dx/dt = Ax + u for a specific input element.
+    
+    Parameters:
+    ---
+    A (array_like): The known state matrix A of shape (n, n).
+    input_index (int): The index (0-based) of the input element u_j to pulse.
+    T (array_like, optional): Time steps for the simulation. If None, it is auto-generated.
+    input_scale (float, optional): Multiplicative scale for the selected input.
+    
+    Returns:
+    ---
+    t (ndarray): 1D array of time values.
+    y (ndarray): Array of shape (len(t), n) containing the response of all states over time.
+    """
+    A = np.atleast_2d(A)
+    n = A.shape[0]
+
+    if A.shape != (n, n):
+        raise ValueError(f"A must be square, got shape {A.shape}")
+
+    if not 0 <= input_index < n:
+        raise IndexError(f"input_index {input_index} out of range for {n} states")
+    
+    # B matrix isolates the specific input element
+    B = np.zeros((n, 1))
+    B[input_index, 0] = input_scale
+    
+    # C matrix is the identity matrix (assuming we want to observe all states)
+    C = np.eye(n)
+    D = np.zeros((n, 1)) # D matrix is zero
+    
+    # Define the continuous-time LTI system
+    sys = scipy.signal.StateSpace(A, B, C, D)
+    
+    # Calculate the impulse response
+    t, y = scipy.signal.impulse(sys, T=T)
+    
+    return t, y    
+
+
+class TESModel:
+    """
+    Frequency-domain analysis wrapper for a linearized TES thermal model.
+
+    ``TESModel`` combines three sources of information:
+
+    * the OpenModelica-generated Python linearized model,
+    * the full Modelica source used to recover conductance endpoints, and
+    * steady-state simulation results used for component values.
+
+    It precomputes the complex frequency grid and inverse system matrices used
+    by impedance, responsivity, and noise calculations.
+    """
+
+    def __init__(self, linearized_model_filename, full_model_filename, simulation_results_filename, config, f_min = 1, f_max = 100e3, points = 1000):
+        """
+        Create a TES frequency-domain model.
+
+        config: dict
+            Dictionary containing the configuration parameters for the analysis. List of parameters:
+            "L": Inductance value of the TES circuit in Henrys (H).
+            "RL": Resistance value of the TES circuit in Ohms (Ω).
+            
+        We need to follow some conventions for the model to work properly. The first state variable must be the voltage across the TES, the second state variable must be the current through the TES. The third state variable must be the temperature of the TES. The rest of the state variables are the temperatures of each heat capacity cN, where N is the 1-based index of the heat capacity following increasing order. Example:
+        
+        ['CL_v','L_i','c1_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T','c8_T','c9_T','c10_T']
+
+        Parameters
+        ----------
+        linearized_model_filename : str, pathlib.Path, tuple, callable, or module
+            Generated Python linearized model, or another supported input form
+            accepted by ``load_linearized_model``.
+        full_model_filename : str or pathlib.Path
+            Full Modelica source file used to map each ``g*`` thermal
+            conductance to its two connected heat-capacity endpoints.
+        simulation_results : dict[str, array-like]
+            Variables loaded from an OpenModelica result file by ``load``.
+            The last value of entries such as ``RL.R``, ``CL.C``, ``L.L``,
+            ``c*.C``, ``g*.K``, and ``g*.n`` is used as the operating point.
+        config : dict
+            Dictionary containing the configuration parameters for the
+            analysis. Currently stored on the instance for caller use; expected
+            keys include ``"L"`` and ``"RL"`` for inductance and load/shunt
+            resistance.
+        f_min, f_max : float, optional
+            Minimum and maximum frequencies in Hz for the logarithmic analysis
+            grid.
+        points : int, optional
+            Number of frequency samples between ``f_min`` and ``f_max``.
+
+        Attributes
+        ----------
+        frequencies : numpy.ndarray
+            Log-spaced frequency grid in Hz.
+        iw : numpy.ndarray
+            Complex angular frequencies, ``2j * pi * frequencies``.
+        model : dict
+            Normalized state-space model returned by ``load_linearized_model``.
+        matrices_inv : dict
+            Precomputed inverse matrix for each complex angular frequency.
+        """
+        timesteps, self.simulation_results = load(simulation_results_filename)
+        self.config = config
+        
+        self.frequencies = np.logspace(np.log10(f_min), np.log10(f_max), points)
+        self.iw = 2j*np.pi*self.frequencies
+
+        # Load models
+        self.model = load_linearized_model(linearized_model_filename)
+        self.model_conductance_map = parse_thermal_conductance_connections(full_model_filename)
+        self.nparams = len(self.model["x0"])
+        
+        # hardcoded parameters
+        self.n_capacities = self.nparams - 2 # First 2 are TES V and I, the rest are heat capacities
+        self.index_cload_v = 0
+        self.index_tes_i = 1
+        self.index_tes_c = 2
+        
+        # Coefficients to be multiplied to external input if the input is given as [dV, dVbias, dP, ...]
+        self.external_input_coeff = np.zeros(self.nparams)
+        self.external_input_coeff[0] = 1/self.simulation_results[f"RL.R"][-1]/self.simulation_results[f"CL.C"][-1]
+        self.external_input_coeff[1] = 1/self.simulation_results[f"L.L"][-1]
+        for i in range(2, self.nparams):
+            self.external_input_coeff[i] = 1/self.simulation_results[f"c{i-1}.C"][-1]
+        
+        # Calculate the matrix and the inverse of the matrix for each frequency
+        self.matrices = {iw: self.get_matrix(iw) for iw in self.iw}
+        self.matrices_inv = {iw: np.linalg.inv(matrix) for iw, matrix in self.matrices.items()}
+
+
+    def _heat_capacity_state_index(self, index_cinput):
+        """
+        Convert a heat-capacity selector to a zero-based state index.
+        """
+        if index_cinput == 0:
+            raise ValueError(
+                "index_cinput is 1-based for heat capacities; use 1 for c1 "
+                "or a negative value to count from the end"
+            )
+
+        if index_cinput < 0:
+            ind = self.nparams + index_cinput
+        else:
+            ind = self.index_tes_c + index_cinput - 1
+
+        if not self.index_tes_c <= ind < self.nparams:
+            raise IndexError(
+                f"index_cinput {index_cinput} selects state index {ind}, "
+                f"but heat-capacity states are {self.index_tes_c}..{self.nparams - 1}"
+            )
+
+        return ind
+
+
+    def _warn_if_unstable(self):
+        """
+        Warn when the linearized state matrix has unstable poles.
+        """
+        eigvals = np.linalg.eigvals(self.model["A"])
+        max_real = np.max(eigvals.real)
+
+        if max_real > 0:
+            pole = eigvals[np.argmax(eigvals.real)]
+            warnings.warn(
+                "The linearized model has an unstable pole "
+                f"({pole.real:.6g}{pole.imag:+.6g}j 1/s); "
+                "the impulse response may diverge.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+
+    def get_matrix(self, iw):
+        """
+        Compute the matrix of the system of equations for a given frequency iw
+        ---
+        iw: complex float, complex frequency
+        A: array of complex float, matrix of the system of equations
+
+        Parameters
+        ----------
+        iw : complex
+            Complex angular frequency, normally ``2j * pi * f``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex matrix ``-A + iw * I`` used to solve the Fourier-domain
+            perturbation equations.
+        """
+        A = self.model["A"]
+        N = - A + iw*np.eye(A.shape[0]) # Compute eigenvectors
+        return N
+        
+        
+    def get_solution_full(self, external_input, norm = True):
+        """
+        Compute the solution of the system of equations of iw*X = A*X + external_input
+
+        Parameters
+        ----------
+        external_input : array-like
+            Excitation vector with one entry per state. When ``norm`` is true,
+            entries are interpreted as physical perturbations such as voltage
+            or power and multiplied by ``external_input_coeff``.
+        norm : bool, optional
+            If true, scale ``external_input`` by the operating-point
+            coefficients before solving. If false, use ``external_input``
+            directly as the right-hand side.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex response array with shape ``(len(frequencies), nparams)``.
+        """
+        d_out = []
+        for iw in self.iw:
+            if norm:
+                d_in = external_input * self.external_input_coeff
+            else:
+                d_in = external_input
+            d_out.append(self.matrices_inv[iw].dot(d_in))
+        d_out = np.array(d_out)
+        return d_out
+        
+    def get_solution_single(self, index_input, index_output):
+        """
+        Solve the response from one input coordinate to one output coordinate.
+
+        Parameters
+        ----------
+        index_input : int
+            Zero-based state-space coordinate to excite. The excitation uses
+            the corresponding ``external_input_coeff`` value.
+        index_output : int
+            Zero-based state-space coordinate to read from the solved response.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex transfer function sampled on ``self.frequencies``.
+        """
+        d_out = []
+        for iw in self.iw:
+            d_in = np.zeros(self.nparams)  # Pulse to Absorber
+            d_in[index_input] = self.external_input_coeff[index_input]
+            d_out.append(self.matrices_inv[iw].dot(d_in)[index_output])
+        d_out = np.array(d_out)
+        return d_out
+    
+    def get_dIdP(self, index_cinput = -1):
+        """
+        Compute TES current responsivity to a power input on a heat capacity.
+
+        Parameters
+        ----------
+        index_cinput : int, optional
+            Heat-capacity selector. Positive values are 1-based, so ``1``
+            selects ``c1_T``. Negative values count from the final
+            heat-capacity state, so ``-1`` selects the last ``c*_T``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex ``dI/dP`` transfer function on ``self.frequencies``. The
+            value is also stored as ``self.dIdP``.
+        """
+        ind_c = self._heat_capacity_state_index(index_cinput)
+        self.dIdP = self.get_solution_single(index_input=ind_c, index_output=self.index_tes_i)
+        return self.dIdP
+    
+    def get_dIdV(self):
+        """
+        Compute TES current responsivity to external voltage excitation.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex ``dI/dV`` transfer function on ``self.frequencies``. The
+            value is also stored as ``self.dIdV``.
+        """
+        self.dIdV = self.get_solution_single(index_input=self.index_cload_v, index_output=self.index_tes_i)
+        return self.dIdV
+        
+            
+    def get_impedance(self):
+        """
+        Compute the complex TES impedance from voltage and current response.
+
+        The method excites the external voltage input, solves for the TES
+        current response, subtracts the inductive voltage contribution, and
+        returns ``dV / dI``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Complex impedance sampled on ``self.frequencies``. The value is
+            also stored as ``self.Z_TES``.
+        """
+        d_Vext = np.zeros(self.nparams)
+        d_Vext[0] = 1
+        solution = self.get_solution_full(d_Vext, norm = True)
+        dI = solution[:, self.index_tes_i]
+        dV = solution[:, self.index_cload_v] - self.iw * self.simulation_results["L.L"]
+        self.Z_TES = dV/dI
+        return self.Z_TES
+    
+
+    
+    @staticmethod
+    def noise_phonon(K,T1,T2,n):
+        """
+        Phonon noise density, or say thermal fluctuation noise between 2 components. Defined as noise=sqrt( 2*kb*(G1*T1^2 + G2*T2^2) )
+        Since G = nKT1^(n-1), nosie = sqrt( 2*kb*n*K*(T1^(n+1) + T2^(n+1)) )
+
+        Parameters
+        ----------
+        K : float
+            Conductance constant in ``P = K * (T1^n - T2^n)``.
+        T1, T2 : float
+            Temperatures of the two connected components in K.
+        n : float
+            Thermal conductance exponent.
+
+        Returns
+        -------
+        float
+            Thermal fluctuation noise amplitude in W/sqrt(Hz).
+        """
+        noise = np.sqrt(2.* scipy.constants.k * n * K * (T1**(n+1) + T2**(n+1)))
+        return noise
+    
+    
+    def get_noise(self, 
+                    RL_temperature = None, 
+                    noise_electronics = 0, 
+                    noise_flicker_corner = 1e-6, 
+                    noise_flicker_gamma = 1,
+                    index_cinput = -1):
+        """
+        Compute the noise density.
+        Parameters
+        ----------
+        RL_temperature: float
+        noise_electronics: float, in A/sqrt(Hz)
+            Additional electronic noise, e.g. from the readout electronics
+        noise_flicker_corner: float, in Hz
+            Corner frequency of the flicker noise, below which the noise increases as 1/f^gamma
+        noise_flicker_gamma: float
+            Exponent of the flicker noise, below the corner frequency. The noise increases as 1/f^gamma
+        index_cinput: int
+            Zero-based index of the heat capacity where the input power is applied. If negative, it counts from the end of the list. For example, -1 means the last heat capacity, -2 means the second to last, etc. For example, if the list of parameters is ['CL_v','L_i','c1_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T'], then index_cinput = -1 means c17, index_cinput = -2 means c9, index_cinput = 2 means c1, index_cinput = 3 means c2 etc.
+
+        Returns
+        -------
+        tuple[dict[str, numpy.ndarray], numpy.ndarray]
+            Dictionary of current-noise contributions keyed by source name, and
+            the frequency grid in Hz.
+
+        Side Effects
+        ------------
+        Stores intermediate and derived noise arrays on the instance, including
+        ``noise_source_vectors``, ``noise_current``, ``noise_power``, and
+        ``noise_power_square_sum``. Prints the estimated sigma energy
+        resolution in eV.
+        """
+        # Initialize the noise source vectors
+        self.noise_source_vectors = {}
+                
+        ## 1. Thermal noise (passive + active)
+        TES_R0 = self.simulation_results["c1.R"][-1]
+        TES_T0 = self.simulation_results["c1.T"][-1]
+        TES_beta = self.simulation_results["c1.beta0"][-1]
+        BIAS_RL = self.simulation_results["RL.R"][-1]
+        BIAS_L = self.simulation_results["L.L"][-1]
+        BIAS_T = RL_temperature if RL_temperature is not None else TES_T0
+        
+        # External Johnson Noise across shunt resistor
+        self.noise_source_vectors["External Johnson noise"] = np.zeros(self.nparams)        
+        self.noise_source_vectors["External Johnson noise"][0] = np.sqrt(4.*scipy.constants.k * BIAS_T*BIAS_RL)         
+        # Internal Johnson Noise, also called TES Johnson Noise
+        self.noise_source_vectors["TES Johnson noise"] = np.zeros(self.nparams)
+        self.noise_source_vectors["TES Johnson noise"][1] = np.sqrt(4.*scipy.constants.k * TES_T0*TES_R0 * (1+2*TES_beta)) 
+
+        ## 2. Phonon noise
+        for i in self.model_conductance_map:
+            ## Index of the two ends
+            inds = self.model_conductance_map[i]
+            K =  self.simulation_results[f"g{i}.K"][-1]
+            n =  self.simulation_results[f"g{i}.n"][-1]
+            T1 =  self.simulation_results[f"g{i}.port_a.T"][-1]
+            T2 =  self.simulation_results[f"g{i}.port_b.T"][-1]
+            
+            ## Make a noise vector for each phonon noise term, with the noise term in the two ends of the conductance
+            TFN = self.noise_phonon(K,T1,T2,n)
+            self.noise_source_vectors[f"TFN_{i}"] = np.zeros(self.nparams)
+            if inds[0]!=0:
+                self.noise_source_vectors[f"TFN_{i}"][inds[0]+1] = TFN
+            if inds[1]!=0:
+                self.noise_source_vectors[f"TFN_{i}"][inds[1]+1] = -TFN
+
+        ## 3. Readout noise (electronics + flicker noise)
+        ##    It is directly given, and does not go into noise_source_vectors
+        self.noise_readout = np.ones(len(self.iw)) * noise_electronics
+        self.noise_flicker = (self.frequencies[1:] / noise_flicker_corner) ** (-noise_flicker_gamma)* noise_electronics
+        self.noise_flicker = np.concatenate([[self.noise_flicker[0]], self.noise_flicker]) 
+        self.noise_readout = np.sqrt(self.noise_readout**2 + self.noise_flicker**2)
+        
+
+        ## Convert all noise terms into TES current
+        self.noise_current = {}
+        self.noise_current["Readout noise"] = self.noise_readout
+        for key in self.noise_source_vectors:
+            self.noise_current[key] = self.get_solution_full(self.noise_source_vectors[key])[:, self.index_tes_i].real
+
+        ## Also convert it into target energy deposition
+        dIdP = self.get_dIdP(index_cinput = index_cinput)
+        self.noise_power = {key: abs(self.noise_current[key]/dIdP) for key in self.noise_current}
+        self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
+
+        
+        # Integrate the NEP
+        self.noise_power_integral = np.sum(1/self.noise_power_square_sum) * (self.frequencies[1] - self.frequencies[0])  # Approximate the integral using the trapezoidal rule
+        # Compute the resolution of our detector
+        resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
+        resolution_sigma_ev = resolution_sigma/scipy.constants.e
+        
+        print("Resolution (Sigma) in eV = ",resolution_sigma_ev)
+        
+        # Compute an ideal TES resolution
+        # ctot = cg + ca + cau1 + cwb1 + cau2 + csi + cte + cm + cwb2
+        # rough_resolution = np.sqrt(4*p['kb']*p['Tc']**2*ctot/p['alpha0']*np.sqrt(p['ntem']/2.)) # In sigma
+        # # Convert this to eV
+        # rough_resolution_ev = rough_resolution/p['eVtoJ']
+        # ideal_resolution = rough_resolution_ev
+        # print("Ideal Resolution in eV = ",rough_resolution_ev)
+
+        return self.noise_current, self.frequencies
+    
+    def get_impulse(self, index_cinput = -1, T=None):
+        """
+        Compute the impulse response of the linearized system
+        ---
+        index_cinput: index of the external input
+        
+        Returns
+        ---
+        t (ndarray): 1D array of time values.
+        y (ndarray): Array of shape (len(t), n) containing the response of all states over time.
+        """
+        
+        ind = self._heat_capacity_state_index(index_cinput)
+        self._warn_if_unstable()
+        return get_impulse_response(
+            A=self.model["A"],
+            input_index=ind,
+            T=T,
+            input_scale=self.external_input_coeff[ind],
+        )
+        
+    def get_impulse2(self, energy, index_input = -1, T=None):
+        """
+        Linear solver for pulse.
+        ---
+        Returns
+        ---
+        t (ndarray): 1D array of time values.
+        y (ndarray): Array of shape (len(t), n) containing the response of all states over time.
+        """
+        
+        N = self.model["A"]
+        eigenvalues, eigenvectors  = np.linalg.eig(N) # Compute eigenvalues (Eig) and eigenvectors (P) of M
+        eigenvectors_inv = np.linalg.inv(eigenvectors ) # Compute inverse of the eigenvectors      
+        u = np.zeros(self.nparams)  # Pulse to Absorber
+        u[index_input] = energy
+        u = u * self.external_input_coeff
+        
+        A = eigenvectors_inv.dot(u) # Dot the inverse of the eigenvector with the input pulse to get our coefficients
+        taus = 1.0/eigenvalues  # get the time constants from the eigenvalues
+        print(taus)
+        if T is None:
+            T = np.linspace(0, max(taus), num = 1000,endpoint=True) # create an array of times to evaluate our solutions at 
+              
+        exp_vec = list(map(lambda tau,a: a*np.exp(T/tau), taus, A))
+        y = eigenvectors.dot(exp_vec).T # create a vector of the solutions
+        
+        return T, y
+
+
+
+def load(filename):
+    """
+    # File format
+    # https://openmodelica.org/doc/OpenModelicaUsersGuide/latest/technical_details.html
+
+    Load an OpenModelica MATLAB ``.mat`` result file.
+
+    The loader decodes the OpenModelica ``name`` matrix and ``dataInfo`` table,
+    applies negated aliases, and returns every readable variable as a NumPy
+    array. Variables stored in ``data_1`` are typically parameters and
+    constants; variables stored in ``data_2`` are time-series results.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Path to the OpenModelica result file.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, dict[str, numpy.ndarray]]
+        Time array and a dictionary mapping Modelica variable names to values.
+    """
+    mat = loadmat(filename, chars_as_strings=False)
+
+    name_matrix = mat["name"]
+    data_info = mat["dataInfo"]
+
+    def decode_strings(char_matrix, n_variables):
+        """
+        Decode OpenModelica character matrix.
+
+        Handles scipy returning either:
+          - Unicode/string characters
+          - integer character codes
+
+        Also handles either matrix orientation.
+
+        Parameters
+        ----------
+        char_matrix : numpy.ndarray
+            Character matrix from the OpenModelica ``name`` field.
+        n_variables : int
+            Number of variable names expected from ``dataInfo``.
+
+        Returns
+        -------
+        list[str]
+            Decoded variable names.
+
+        Raises
+        ------
+        ValueError
+            If the matrix orientation cannot be matched to ``n_variables``.
+        """
+
+        # Determine which axis represents variables
+        if char_matrix.shape[1] == n_variables:
+            columns_are_variables = True
+        elif char_matrix.shape[0] == n_variables:
+            columns_are_variables = False
+        else:
+            raise ValueError(
+                f"Cannot determine name matrix orientation.\n"
+                f"name shape: {char_matrix.shape}\n"
+                f"number of variables: {n_variables}"
+            )
+
+        names = []
+
+        for i in range(n_variables):
+            chars = (
+                char_matrix[:, i]
+                if columns_are_variables
+                else char_matrix[i, :]
+            )
+
+            chars = np.asarray(chars).ravel()
+
+            if chars.dtype.kind in ("U", "S"):
+                # scipy already decoded characters
+                parts = []
+
+                for c in chars:
+                    if isinstance(c, bytes):
+                        c = c.decode("utf-8", errors="ignore")
+                    else:
+                        c = str(c)
+
+                    if c != "\x00":
+                        parts.append(c)
+
+                name = "".join(parts).rstrip()
+
+            else:
+                # Numeric character codes
+                name = "".join(
+                    chr(int(c))
+                    for c in chars
+                    if int(c) != 0
+                ).rstrip()
+
+            names.append(name)
+
+        return names
+
+    n_variables = data_info.shape[1]
+    names = decode_strings(name_matrix, n_variables)
+
+    data_1 = mat.get("data_1")
+    data_2 = mat.get("data_2")
+
+    variables = {}
+
+    for i, name in enumerate(names):
+
+        data_set = int(data_info[0, i])
+        index = int(data_info[1, i])
+
+        # Negative index indicates a negated alias
+        sign = -1.0 if index < 0 else 1.0
+
+        # MATLAB indices start at 1
+        row = abs(index) - 1
+
+        if data_set == 1 and data_1 is not None:
+            values = sign * data_1[row, :]
+
+        elif data_set == 2 and data_2 is not None:
+            values = sign * data_2[row, :]
+
+        else:
+            continue
+
+        variables[name] = np.asarray(values).squeeze()
+
+    time = np.asarray(data_2[0, :]).squeeze()
+
+    return time, variables
+
+# --------------------------------------------------------
+# Parse modelica model
 
 _CONNECT_RE = re.compile(r"\bconnect\s*\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)", re.DOTALL)
 _COMPONENT_RE = re.compile(
@@ -263,6 +901,8 @@ def parse_thermal_conductance_connections(modelica_file):
         )
     }
 
+# --------------------------------------------------------
+# Load linearized python model
 
 def _load_linearized_model(linearized_model):
     """
@@ -515,532 +1155,7 @@ def load_linearized_model(linearized_model):
     }
 
 
-class TESModel:
-    """
-    Frequency-domain analysis wrapper for a linearized TES thermal model.
-
-    ``TESModel`` combines three sources of information:
-
-    * the OpenModelica-generated Python linearized model,
-    * the full Modelica source used to recover conductance endpoints, and
-    * steady-state simulation results used for component values.
-
-    It precomputes the complex frequency grid and inverse system matrices used
-    by impedance, responsivity, and noise calculations.
-    """
-
-    def __init__(self, linearized_model_filename, full_model_filename, simulation_results, config, f_min = 1, f_max = 100e3, points = 1000):
-        """
-        Create a TES frequency-domain model.
-
-        config: dict
-            Dictionary containing the configuration parameters for the analysis. List of parameters:
-            "L": Inductance value of the TES circuit in Henrys (H).
-            "RL": Resistance value of the TES circuit in Ohms (Ω).
-            
-        We need to follow some conventions for the model to work properly. The first state variable must be the voltage across the TES, the second state variable must be the current through the TES. The third state variable must be the temperature of the TES. The rest of the state variables are the temperatures of each heat capacity cN, where N is the 1-based index of the heat capacity following increasing order. Example:
-        
-        ['CL_v','L_i','c1_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T','c8_T','c9_T','c10_T']
-
-        Parameters
-        ----------
-        linearized_model_filename : str, pathlib.Path, tuple, callable, or module
-            Generated Python linearized model, or another supported input form
-            accepted by ``load_linearized_model``.
-        full_model_filename : str or pathlib.Path
-            Full Modelica source file used to map each ``g*`` thermal
-            conductance to its two connected heat-capacity endpoints.
-        simulation_results : dict[str, array-like]
-            Variables loaded from an OpenModelica result file by ``load``.
-            The last value of entries such as ``RL.R``, ``CL.C``, ``L.L``,
-            ``c*.C``, ``g*.K``, and ``g*.n`` is used as the operating point.
-        config : dict
-            Dictionary containing the configuration parameters for the
-            analysis. Currently stored on the instance for caller use; expected
-            keys include ``"L"`` and ``"RL"`` for inductance and load/shunt
-            resistance.
-        f_min, f_max : float, optional
-            Minimum and maximum frequencies in Hz for the logarithmic analysis
-            grid.
-        points : int, optional
-            Number of frequency samples between ``f_min`` and ``f_max``.
-
-        Attributes
-        ----------
-        frequencies : numpy.ndarray
-            Log-spaced frequency grid in Hz.
-        iw : numpy.ndarray
-            Complex angular frequencies, ``2j * pi * frequencies``.
-        model : dict
-            Normalized state-space model returned by ``load_linearized_model``.
-        matrices_inv : dict
-            Precomputed inverse matrix for each complex angular frequency.
-        """
-        self.simulation_results = simulation_results
-        self.config = config
-        
-        self.frequencies = np.logspace(np.log10(f_min), np.log10(f_max), points)
-        self.iw = 2j*np.pi*self.frequencies
-
-        # Load models
-        self.model = load_linearized_model(linearized_model_filename)
-        self.model_conductance_map = parse_thermal_conductance_connections(full_model_filename)
-        self.nparams = len(self.model["x0"])
-        
-        # hardcoded parameters
-        self.n_capacities = self.nparams - 2 # First 2 are TES V and I, the rest are heat capacities
-        self.index_cload_v = 0
-        self.index_tes_i = 1
-        self.index_tes_c = 2
-        
-        # Coefficients to be multiplied to external input if the input is given as [dV, dVbias, dP, ...]
-        self.external_input_coeff = np.zeros(self.nparams)
-        self.external_input_coeff[0] = 1/self.simulation_results[f"RL.R"][-1]/self.simulation_results[f"CL.C"][-1]
-        self.external_input_coeff[1] = 1/self.simulation_results[f"L.L"][-1]
-        for i in range(2, self.nparams):
-            self.external_input_coeff[i] = 1/self.simulation_results[f"c{i-1}.C"][-1]
-        
-        # Calculate the matrix and the inverse of the matrix for each frequency
-        self.matrices = {iw: self.get_matrix(iw) for iw in self.iw}
-        self.matrices_inv = {iw: np.linalg.inv(matrix) for iw, matrix in self.matrices.items()}
-
-
-    def get_matrix(self, iw):
-        """
-        Compute the matrix of the system of equations for a given frequency iw
-        ---
-        iw: complex float, complex frequency
-        A: array of complex float, matrix of the system of equations
-
-        Parameters
-        ----------
-        iw : complex
-            Complex angular frequency, normally ``2j * pi * f``.
-
-        Returns
-        -------
-        numpy.ndarray
-            Complex matrix ``-A + iw * I`` used to solve the Fourier-domain
-            perturbation equations.
-        """
-        A = self.model["A"]
-        N = - A + iw*np.eye(A.shape[0]) # Compute eigenvectors
-        return N
-        
-        
-    def get_solution_full(self, external_input, norm = True):
-        """
-        Compute the solution of the system of equations of iw*X = A*X + external_input
-
-        Parameters
-        ----------
-        external_input : array-like
-            Excitation vector with one entry per state. When ``norm`` is true,
-            entries are interpreted as physical perturbations such as voltage
-            or power and multiplied by ``external_input_coeff``.
-        norm : bool, optional
-            If true, scale ``external_input`` by the operating-point
-            coefficients before solving. If false, use ``external_input``
-            directly as the right-hand side.
-
-        Returns
-        -------
-        numpy.ndarray
-            Complex response array with shape ``(len(frequencies), nparams)``.
-        """
-        d_out = []
-        for iw in self.iw:
-            if norm:
-                d_in = external_input * self.external_input_coeff
-            else:
-                d_in = external_input
-            d_out.append(self.matrices_inv[iw].dot(d_in))
-        d_out = np.array(d_out)
-        return d_out
-        
-    def get_solution_single(self, index_input, index_output):
-        """
-        Solve the response from one input coordinate to one output coordinate.
-
-        Parameters
-        ----------
-        index_input : int
-            Zero-based state-space coordinate to excite. The excitation uses
-            the corresponding ``external_input_coeff`` value.
-        index_output : int
-            Zero-based state-space coordinate to read from the solved response.
-
-        Returns
-        -------
-        numpy.ndarray
-            Complex transfer function sampled on ``self.frequencies``.
-        """
-        d_out = []
-        for iw in self.iw:
-            d_in = np.zeros(self.nparams)  # Pulse to Absorber
-            d_in[index_input] = self.external_input_coeff[index_input]
-            d_out.append(self.matrices_inv[iw].dot(d_in)[index_output])
-        d_out = np.array(d_out)
-        return d_out
-    
-    def get_dIdP(self, index_cinput = -1):
-        """
-        Compute TES current responsivity to a power input on a heat capacity.
-
-        Parameters
-        ----------
-        index_cinput : int, optional
-            Heat-capacity selector using the current implementation's index
-            conversion. Negative values are converted with
-            ``self.nparams - 1 + index_cinput``; positive values are converted
-            with ``index_cinput - 1``. This preserves the existing behavior,
-            including the historical default ``-1``.
-
-        Returns
-        -------
-        numpy.ndarray
-            Complex ``dI/dP`` transfer function on ``self.frequencies``. The
-            value is also stored as ``self.dIdP``.
-        """
-        ind_c = self.nparams - 1 + index_cinput if index_cinput < 0 else index_cinput - 1 # for example, -1 -> len - 2; 2 -> 1
-        self.dIdP = self.get_solution_single(index_input=ind_c, index_output=self.index_tes_i)
-        return self.dIdP
-    
-    def get_dIdV(self):
-        """
-        Compute TES current responsivity to external voltage excitation.
-
-        Returns
-        -------
-        numpy.ndarray
-            Complex ``dI/dV`` transfer function on ``self.frequencies``. The
-            value is also stored as ``self.dIdV``.
-        """
-        self.dIdV = self.get_solution_single(index_input=self.index_cload_v, index_output=self.index_tes_i)
-        return self.dIdV
-        
-            
-    def get_impedance(self):
-        """
-        Compute the complex TES impedance from voltage and current response.
-
-        The method excites the external voltage input, solves for the TES
-        current response, subtracts the inductive voltage contribution, and
-        returns ``dV / dI``.
-
-        Returns
-        -------
-        numpy.ndarray
-            Complex impedance sampled on ``self.frequencies``. The value is
-            also stored as ``self.Z_TES``.
-        """
-        d_Vext = np.zeros(self.nparams)
-        d_Vext[0] = 1
-        solution = self.get_solution_full(d_Vext, norm = True)
-        dI = solution[:, self.index_tes_i]
-        dV = solution[:, self.index_cload_v] - self.iw * self.simulation_results["L.L"]
-        self.Z_TES = dV/dI
-        return self.Z_TES
-    
-
-    
-    @staticmethod
-    def noise_phonon(K,T1,T2,n):
-        """
-        Phonon noise density, or say thermal fluctuation noise between 2 components. Defined as noise=sqrt( 2*kb*(G1*T1^2 + G2*T2^2) )
-        Since G = nKT1^(n-1), nosie = sqrt( 2*kb*n*K*(T1^(n+1) + T2^(n+1)) )
-        ---
-        K: float
-            conductance constant as defined in P = K*(T1^n - T2^n)
-        T1,T2: float
-            temperature of component 1 and 2
-        n: float
-            exponent of thermal conductance
-        ---
-        noise: float
-            phonon noise
-
-        Parameters
-        ----------
-        K : float
-            Conductance constant in ``P = K * (T1^n - T2^n)``.
-        T1, T2 : float
-            Temperatures of the two connected components in K.
-        n : float
-            Thermal conductance exponent.
-
-        Returns
-        -------
-        float
-            Thermal fluctuation noise amplitude in W/sqrt(Hz).
-        """
-        noise = np.sqrt(2.* scipy.constants.k * n * K * (T1**(n+1) + T2**(n+1)))
-        return noise
-    
-    
-    def get_noise(self, 
-                    RL_temperature = None, 
-                    noise_electronics = 0, 
-                    noise_flicker_corner = 1e-6, 
-                    noise_flicker_gamma = 1,
-                    index_cinput = -1):
-        """
-        Compute the noise density.
-        ---
-        RL_temperature: float
-        noise_electronics: float, in A/sqrt(Hz)
-            Additional electronic noise, e.g. from the readout electronics
-        noise_flicker_corner: float, in Hz
-            Corner frequency of the flicker noise, below which the noise increases as 1/f^gamma
-        noise_flicker_gamma: float
-            Exponent of the flicker noise, below the corner frequency. The noise increases as 1/f^gamma
-        index_cinput: int
-            Zero-based index of the heat capacity where the input power is applied. If negative, it counts from the end of the list. For example, -1 means the last heat capacity, -2 means the second to last, etc. For example, if the list of parameters is ['CL_v','L_i','c1_T','c2_T','c3_T','c4_T','c5_T','c6_T','c7_T'], then index_cinput = -1 means c17, index_cinput = -2 means c9, index_cinput = 2 means c1, index_cinput = 3 means c2 etc.
-
-        Parameters
-        ----------
-        RL_temperature : float or None, optional
-            Temperature of the shunt/load resistor for external Johnson noise.
-            If omitted, the TES operating temperature ``c1.T`` is used.
-        noise_electronics : float, optional
-            White readout current noise in A/sqrt(Hz).
-        noise_flicker_corner : float, optional
-            Flicker-noise corner frequency in Hz.
-        noise_flicker_gamma : float, optional
-            Power-law exponent for the flicker contribution below the corner.
-        index_cinput : int, optional
-            Heat-capacity selector used to convert current noise to equivalent
-            input power through ``dI/dP``. The value is passed directly to
-            ``get_dIdP`` and follows that method's index conversion.
-
-        Returns
-        -------
-        tuple[dict[str, numpy.ndarray], numpy.ndarray]
-            Dictionary of current-noise contributions keyed by source name, and
-            the frequency grid in Hz.
-
-        Side Effects
-        ------------
-        Stores intermediate and derived noise arrays on the instance, including
-        ``noise_source_vectors``, ``noise_current``, ``noise_power``, and
-        ``noise_power_square_sum``. Prints the estimated sigma energy
-        resolution in eV.
-        """
-        # Initialize the noise source vectors
-        self.noise_source_vectors = {}
-                
-        ## 1. Thermal noise (passive + active)
-        TES_R0 = self.simulation_results["c1.R"][-1]
-        TES_T0 = self.simulation_results["c1.T"][-1]
-        TES_beta = self.simulation_results["c1.beta0"][-1]
-        BIAS_RL = self.simulation_results["RL.R"][-1]
-        BIAS_L = self.simulation_results["L.L"][-1]
-        BIAS_T = RL_temperature if RL_temperature is not None else TES_T0
-        
-        # External Johnson Noise across shunt resistor
-        self.noise_source_vectors["External Johnson noise"] = np.zeros(self.nparams)        
-        self.noise_source_vectors["External Johnson noise"][0] = np.sqrt(4.*scipy.constants.k * BIAS_T*BIAS_RL)         
-        # Internal Johnson Noise, also called TES Johnson Noise
-        self.noise_source_vectors["TES Johnson noise"] = np.zeros(self.nparams)
-        self.noise_source_vectors["TES Johnson noise"][1] = np.sqrt(4.*scipy.constants.k * TES_T0*TES_R0 * (1+2*TES_beta)) 
-
-        ## 2. Phonon noise
-        for i in self.model_conductance_map:
-            ## Index of the two ends
-            inds = self.model_conductance_map[i]
-            K =  self.simulation_results[f"g{i}.K"][-1]
-            n =  self.simulation_results[f"g{i}.n"][-1]
-            T1 =  self.simulation_results[f"g{i}.port_a.T"][-1]
-            T2 =  self.simulation_results[f"g{i}.port_b.T"][-1]
-            
-            ## Make a noise vector for each phonon noise term, with the noise term in the two ends of the conductance
-            TFN = self.noise_phonon(K,T1,T2,n)
-            self.noise_source_vectors[f"TFN_{i}"] = np.zeros(self.nparams)
-            if inds[0]!=0:
-                self.noise_source_vectors[f"TFN_{i}"][inds[0]+1] = TFN
-            if inds[1]!=0:
-                self.noise_source_vectors[f"TFN_{i}"][inds[1]+1] = -TFN
-
-        ## 3. Readout noise (electronics + flicker noise)
-        ##    It is directly given, and does not go into noise_source_vectors
-        self.noise_readout = np.ones(len(self.iw)) * noise_electronics
-        self.noise_flicker = (self.frequencies[1:] / noise_flicker_corner) ** (-noise_flicker_gamma)* noise_electronics
-        self.noise_flicker = np.concatenate([[self.noise_flicker[0]], self.noise_flicker]) 
-        self.noise_readout = np.sqrt(self.noise_readout**2 + self.noise_flicker**2)
-        
-
-        ## Convert all noise terms into TES current
-        self.noise_current = {}
-        self.noise_current["Readout noise"] = self.noise_readout
-        for key in self.noise_source_vectors:
-            self.noise_current[key] = self.get_solution_full(self.noise_source_vectors[key])[:, self.index_tes_i].real
-
-        ## Also convert it into target energy deposition
-        dIdP = self.get_dIdP(index_cinput = index_cinput)
-        self.noise_power = {key: self.noise_current[key]/dIdP for key in self.noise_current}
-        self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
-
-        
-        # Integrate the NEP
-        self.noise_power_integral = np.sum(1/self.noise_power_square_sum) * (self.frequencies[1] - self.frequencies[0])  # Approximate the integral using the trapezoidal rule
-        # Compute the resolution of our detector
-        resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
-        resolution_sigma_ev = resolution_sigma/scipy.constants.e
-        
-        print("Resolution (Sigma) in eV = ",resolution_sigma_ev)
-        
-        # Compute an ideal TES resolution
-        # ctot = cg + ca + cau1 + cwb1 + cau2 + csi + cte + cm + cwb2
-        # rough_resolution = np.sqrt(4*p['kb']*p['Tc']**2*ctot/p['alpha0']*np.sqrt(p['ntem']/2.)) # In sigma
-        # # Convert this to eV
-        # rough_resolution_ev = rough_resolution/p['eVtoJ']
-        # ideal_resolution = rough_resolution_ev
-        # print("Ideal Resolution in eV = ",rough_resolution_ev)
-
-        return self.noise_current, self.frequencies
-
-
-def load(filename):
-    """
-    # File format
-    # https://openmodelica.org/doc/OpenModelicaUsersGuide/latest/technical_details.html
-
-    Load an OpenModelica MATLAB ``.mat`` result file.
-
-    The loader decodes the OpenModelica ``name`` matrix and ``dataInfo`` table,
-    applies negated aliases, and returns every readable variable as a NumPy
-    array. Variables stored in ``data_1`` are typically parameters and
-    constants; variables stored in ``data_2`` are time-series results.
-
-    Parameters
-    ----------
-    filename : str or pathlib.Path
-        Path to the OpenModelica result file.
-
-    Returns
-    -------
-    tuple[numpy.ndarray, dict[str, numpy.ndarray]]
-        Time array and a dictionary mapping Modelica variable names to values.
-    """
-    mat = loadmat(filename, chars_as_strings=False)
-
-    name_matrix = mat["name"]
-    data_info = mat["dataInfo"]
-
-    def decode_strings(char_matrix, n_variables):
-        """
-        Decode OpenModelica character matrix.
-
-        Handles scipy returning either:
-          - Unicode/string characters
-          - integer character codes
-
-        Also handles either matrix orientation.
-
-        Parameters
-        ----------
-        char_matrix : numpy.ndarray
-            Character matrix from the OpenModelica ``name`` field.
-        n_variables : int
-            Number of variable names expected from ``dataInfo``.
-
-        Returns
-        -------
-        list[str]
-            Decoded variable names.
-
-        Raises
-        ------
-        ValueError
-            If the matrix orientation cannot be matched to ``n_variables``.
-        """
-
-        # Determine which axis represents variables
-        if char_matrix.shape[1] == n_variables:
-            columns_are_variables = True
-        elif char_matrix.shape[0] == n_variables:
-            columns_are_variables = False
-        else:
-            raise ValueError(
-                f"Cannot determine name matrix orientation.\n"
-                f"name shape: {char_matrix.shape}\n"
-                f"number of variables: {n_variables}"
-            )
-
-        names = []
-
-        for i in range(n_variables):
-            chars = (
-                char_matrix[:, i]
-                if columns_are_variables
-                else char_matrix[i, :]
-            )
-
-            chars = np.asarray(chars).ravel()
-
-            if chars.dtype.kind in ("U", "S"):
-                # scipy already decoded characters
-                parts = []
-
-                for c in chars:
-                    if isinstance(c, bytes):
-                        c = c.decode("utf-8", errors="ignore")
-                    else:
-                        c = str(c)
-
-                    if c != "\x00":
-                        parts.append(c)
-
-                name = "".join(parts).rstrip()
-
-            else:
-                # Numeric character codes
-                name = "".join(
-                    chr(int(c))
-                    for c in chars
-                    if int(c) != 0
-                ).rstrip()
-
-            names.append(name)
-
-        return names
-
-    n_variables = data_info.shape[1]
-    names = decode_strings(name_matrix, n_variables)
-
-    data_1 = mat.get("data_1")
-    data_2 = mat.get("data_2")
-
-    variables = {}
-
-    for i, name in enumerate(names):
-
-        data_set = int(data_info[0, i])
-        index = int(data_info[1, i])
-
-        # Negative index indicates a negated alias
-        sign = -1.0 if index < 0 else 1.0
-
-        # MATLAB indices start at 1
-        row = abs(index) - 1
-
-        if data_set == 1 and data_1 is not None:
-            values = sign * data_1[row, :]
-
-        elif data_set == 2 and data_2 is not None:
-            values = sign * data_2[row, :]
-
-        else:
-            continue
-
-        variables[name] = np.asarray(values).squeeze()
-
-    time = np.asarray(data_2[0, :]).squeeze()
-
-    return time, variables
-
-
-
+## Modify SVGs with simulation result
 
 def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900, display=True):
     """

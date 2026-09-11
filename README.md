@@ -36,14 +36,14 @@ The model annotations store simulation settings so they travel with the files.
 
 ### OMEdit Troubleshooting
 
-- If you see `Class libTES... not found`, load `libTES.mo` first, then reload the system model.
+- If you see `Class libTES\cdots not found`, load `libTES.mo` first, then reload the system model.
 - If you see missing `Modelica.Thermal`, `Modelica.Electrical`, or other standard-library classes, install or load Modelica 4.1.0.
 - If OMEdit reports a parser error around `addClassAnnotation`, restart OMEdit or clear the scripting input/session, then reload `libTES.mo` and the target system model.
 - If a parameter is reported as having neither a value nor a start value, check the parameter declarations in the system model and any parameter file you are using.
 
 ## 3. Running From Command Line
 
-Because the system models depend on the local `libTES` package, load `libTES.mo` before checking or simulating a system model. A direct command such as `omc System_LMO.mo` may fail with `Class libTES... not found` if the library is not already loaded.
+Because the system models depend on the local `libTES` package, load `libTES.mo` before checking or simulating a system model. A direct command such as `omc System_LMO.mo` may fail with `Class libTES\cdots not found` if the library is not already loaded.
 
 The most reliable command-line workflow is to create a small `.mos` script for the model you want to run. Two example `.mos` scripts are given. `run_System_LMO_init.mos` will run the System_LMO model interactively, while `compile_System_LMO_init.mos` only build an executable.
 
@@ -92,10 +92,10 @@ Simulation from `omc` may create generated C files, object files, an executable,
 `python/pymodelica.py` contains helper functions for reading OpenModelica output and analyzing linearized TES models:
 
 - `load(filename)` reads an OpenModelica MATLAB `.mat` result file and returns `(time, variables)`, where `variables` maps Modelica result names such as `c1.T`, `RL.R`, and `g1.G` to NumPy arrays.
-- `load_linearized_model(linearized_model)` normalizes a Python linearization dump produced with `--linearizationDumpLanguage=python`. It returns NumPy arrays for `x0`, `u0`, `A`, `B`, `C`, and `D`, and reorders states to `CL_v`, `L_i`, then `c1_T`, `c2_T`, ... by numeric heat-capacity index.
+- `load_linearized_model(linearized_model)` normalizes a Python linearization dump produced with `--linearizationDumpLanguage=python`. It returns NumPy arrays for `x0`, `u0`, `A`, `B`, `C`, and `D`, and reorders states to `CL_v`, `L_i`, then `c1_T`, `c2_T`, \cdots by numeric heat-capacity index.
 - `parse_thermal_conductance_connections(modelica_file)` reads the full Modelica source and maps each nonlinear conductance `g*` to the heat-capacity endpoints connected to `port_a` and `port_b`. A fixed-temperature bath endpoint is reported as `0`.
 - `TESModel` combines the linearized model, full Modelica source, and steady-state simulation results to compute frequency-domain transfer functions, complex impedance, phonon/Johnson/readout noise contributions, and equivalent input noise.
-- `mod_svg(...)` writes a copy of `System_LMO.svg` with selected simulated values substituted into the diagram labels.
+- `mod_svg(\cdots)` writes a copy of `System_LMO.svg` with selected simulated values substituted into the diagram labels.
 
 Example workflow:
 
@@ -128,21 +128,21 @@ The Python helpers rely on the naming conventions in Section 4.2. In particular,
 `libTES.mo` defines the reusable models used by the system examples:
 
 - `libTES.TES` - TES component with electrical pins, one thermal port, tanh transition resistance, Joule heating, and constant heat capacity.
-    - $R = R_n/2 * (1. + \tanh((T - T_c) * \alpha/T_c - (I - I_0) * \beta/T_c))$
-    - $C * \dot{T} = P_{Joule} + heatPort.Q_{flow}$
+    - $R = \frac{R_n}{2} (1+ \tanh(\frac{T - T_c}{T_c} \alpha - \frac{I - I_0}{I_0} \beta))$
+    - $C \dot{T} = P_{Joule} + Q_{flow}$
 - `libTES.TES2` - Almost the same as `TES` but with temperature dependent heat capacity.
-    - $c_p = a_1*T + a_3*T^3$
-    - $m * c_p * \dot{T} = P_{Joule} + heatPort.Q_{flow}$
+    - $c_p = a_1 T + a_3 T^3$
+    - $m c_p \dot{T} = P_{Joule} + Q_{flow}$
 
 - `libTES.ThermlConductanceN` - nonlinear thermal conductance between two heat ports:
-    - $Q_{flow} = K * (T_a^n - T_b^n)$
+    - $Q_{flow} = K (T_a^n - T_b^n)$
 - `libTES.HeatCapacitorPoly` - thermal mass with polynomial specific heat capacity:
-    - $c_p = a_0 + a_1*T + a_3*T^3 + a_5*T^5$
+    - $c_p = a_0 + a_1 T + a_3 T^3 + a_5 T^5$
 
 ### 4.2 Convention
 
 **The conventions must be followed for the analysis code to work**
-1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always name TES c1.** 
+1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always name TES c1.** It is optional to give the target the largest index.
 2. For TES bias circuit, always use a current bias with a shunt resistor named `RL`, a loop capacitance named `CL`, and a loop inductance named `L`. 
 
 ## 5. Analyzing Linearized Model
@@ -184,22 +184,20 @@ The name of variables are given as stateVars, e.g., for our LMO system model
 
 The first term $V_{C_L}$ is the voltage across the parasitic capacitance of the bias circuit, which is almost identical to the voltage across TES. The second term is the current through the inductor, which is equal to the TES current $I_{TES}$. Let's assume we followed the convention and TES is HeatCapacitance c1. A complete set of equations will be like:
 
-$$
+```math
 \frac{d}{dt} 
-
 \begin{pmatrix}
 \Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_{1} \\ \Delta T_2 \\ \vdots \\ \Delta T_n
 \end{pmatrix}
 
 =
-
 \begin{pmatrix}
- -1/R_LC_L &  -1/C_L  & 0 & 0 &... & 0 \\
-1/L & -R_L(1+\beta)/L &  -\alpha V_{bias}/T_cL & 0 & ... & 0 \\
-0 & (2+\beta)V_{bias}/C_{1} & G_{1,1}/C_1 & G_{1,2}/C_1 & ... & G_{1,n}/C_1 \\
-0  & 0  & G_{2,1}/C_2 & G_{2,2}/C_2 & ... & G_{2,n}/C_1  \\
+ -1/R_LC_L &  -1/C_L  & 0 & 0 & \cdots & 0 \\
+1/L & -R_L(1+\beta)/L &  -\alpha V_{bias}/T_cL & 0 & \cdots & 0 \\
+0 & (2+\beta)V_{bias}/C_{1} & G_{1,1}/C_1 & G_{1,2}/C_1 & \cdots & G_{1,n}/C_1 \\
+0  & 0  & G_{2,1}/C_2 & G_{2,2}/C_2 & \cdots & G_{2,n}/C_1  \\
 \vdots  & \vdots  & \vdots  & \vdots  & \vdots \\
-0 & 0  & G_{n,1}/C_n & G_{n,2}/C_n & ... & G_{n,n}/C_1
+0 & 0  & G_{n,1}/C_n & G_{n,2}/C_n & \cdots & G_{n,n}/C_1
 \end{pmatrix}
 
 \begin{pmatrix}
@@ -209,25 +207,24 @@ $$
 \begin{pmatrix}
 \delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
 \end{pmatrix}
-
-$$
-
-
-in which  (TODO: explain all variables). The big matrix is matrix A in the linearized python model, B = identity matrix, and C = D = 0.
+```
 
 
-We can solve these equations in Fourier space easily. After Fourier transform, d/dt becomes $i\omega$, and the coefficient matrix becomes $H(\omega) = A - diag(i\omega, ... , i\omega)$
+in which $\delta V_{ext}$ is the voltage of the external TES bias (can be replaced with $ R_L \delta I_{ext}$ in a Thévenin equivalent current bias), $\delta V_{int}$ is the internal TES voltage, which is zero except for the TES Johnson noise. The big matrix is matrix A in the linearized python model, B = identity matrix, and C = D = 0.
 
 
-$$
+We can solve these equations in Fourier space easily. After Fourier transform, d/dt becomes $i\omega$, and the coefficient matrix becomes $H(\omega) = A - diag(i\omega, \cdots , i\omega)$
+
+
+```math
 0=
 \begin{pmatrix}
- -1/R_LC_L -i\omega  &  -1/C_L  & 0 &0 & ... & 0 \\
-1/L & -R_L(1+\beta)/L -i\omega &  -\alpha V_{bias}/T_cL & ... & 0 \\
-0 & (2+\beta)V_{bias}/C_{1} & G_{1,1}/C_1 -i\omega & G_{1,2}/C_1 & ... & G_{1,n}/C_1 \\
-0  & 0  & G_{2,1}/C_2 & G_{2,2}/C_2 -i\omega& ... & G_{2,n}/C_2  \\
+ -1/R_LC_L -i\omega  &  -1/C_L  & 0 &0 & \cdots & 0 \\
+1/L & -R_L(1+\beta)/L -i\omega &  -\alpha V_{bias}/T_cL & \cdots & 0 \\
+0 & (2+\beta)V_{bias}/C_{1} & G_{1,1}/C_1 -i\omega & G_{1,2}/C_1 & \cdots & G_{1,n}/C_1 \\
+0  & 0  & G_{2,1}/C_2 & G_{2,2}/C_2 -i\omega& \cdots & G_{2,n}/C_2  \\
 \vdots  & \vdots  & \vdots  & \vdots  & \vdots \\
-0 & 0  & G_{n,1}/C_n & G_{n,2}/C_n & ... & G_{n,n}/C_n -i\omega
+0 & 0  & G_{n,1}/C_n & G_{n,2}/C_n & \cdots & G_{n,n}/C_n -i\omega
 \end{pmatrix}
 
 \begin{pmatrix}
@@ -237,8 +234,7 @@ $$
 \begin{pmatrix}
 \delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
 \end{pmatrix}
-
-$$
+```
 
 
 
@@ -247,25 +243,105 @@ $$
 
 We set all excitations to zero except for $\delta V_{bias} = 1$ and solve for $\Delta I_{TES}$. The solution can be obtained by directly inverting the H matrix, multiply by the excitation vector and take the second component. Since the excitation is model-independent, the same code can be used to calculate complex impedance when model changes. 
 
-$$
+```math
 dIdV(\omega) = \left[ H(\omega)^{-1}\begin{pmatrix}
 0 \\ 1/L \\ 0 \\ 0 \\ \vdots \\ 0
 \end{pmatrix}
 \right]_2
-$$
+```
 
 
 ### 5.2 Noise
 
-The same concept applies to noise, you just need to set the appropriate excitation of each noise source. We will go through each of the noise sources. 
+The same concept applies to noise, you just need to set the appropriate excitation of each noise source. We will go through each of the noise sources. Note that we use **one-sided** frequency for all noise terms.
 
-#### 5.2.1 TES Johnson noise
+#### 5.2.1 Johnson noise
 
-#### 5.2.2 Load resistor Johnson noise
+There load resistor and TES resistance both produces Johnson noise with a **one-sided** power spectral density of $ \overline{V_n^2} = 4k_B T R \Delta f$. But they correspond to 
+different external input. Load resistor noise is $\delta V_{ext}$, while TES noise is $\delta V_{int}$.
 
-#### 5.2.3 Thermal fluctuation noise
 
-#### 5.2.4 Readout noise
+#### 5.2.2 Thermal fluctuation noise (TFN)
+
+For all cases where the temperature difference between two adjoining heat capacity blocks is a step function (ballistic phonons, e-p interaction, Kapitza resistance), the **one-sided** TFN power spectral density is well approximated $ \overline{P_n^2} = 2 k_B (G_1 T_1^2 + G_2 T_2^2) \Delta f $. (BOYLE, WS, and KF RODGERS. "Performance characteristics of a new low-temperature bolometer." SPIE milestone series 179 (2004): 290-291.). It reduces to $4 k_B G T^2$ for a single body in thermal equilibrium, and can be derived from $\langle\Delta E^2\rangle=k_BT^2C$.
+
+Away from equilibrium, the simple formula is only approximate. https://pubmed.ncbi.nlm.nih.gov/20389816/
+
+For each thermal link in the system, the contribution can be calculated by setting $P_i, P_j$ to the TFN of this link and solve for the equation.
+
+#### 5.2.3 Readout noise
+
+Readout noise directly adds on top of the current noise. Thus, it does not involves solving the equation. 
+
+#### 5.2.4 Noise Equivalent Power (NEP)
+
+
+
+### 5.3 MCMC fit
+
+The system could be complicated, and there are many parameters that may not be well constrained by the data. In this case, we can use the MCMC method to fit the parameters with three measurements:
+
+* **bias power** sets the DC equilibrium.
+* **complex impedance** probes electrical response;
+* **pulse response** probes the detector's thermal/electrical transfer function;
+
+
+We can construct a log-likelihood function 
+
+```math
+\boxed{
+\ln\mathcal L
+=
+-\frac12\chi_P^2
+-\frac12\chi_Z^2
+-\frac12\chi_{\rm pulse}^2
+}
+```
+
+with
+
+```math
+\chi_P^2
+=
+\frac{
+[P_{\rm obs}-P_{model}]^2
+}{
+\sigma_P^2
+},
+```
+
+```math
+\chi_Z^2
+=
+\sum_i
+\left[
+\frac{\operatorname{Re}(Z_i^{\rm obs}-Z_i^{\rm model})}
+{\sigma_{\operatorname{Re},i}}
+\right]^2
++
+\left[
+\frac{\operatorname{Im}(Z_i^{\rm obs}-Z_i^{\rm model})}
+{\sigma_{\operatorname{Im},i}}
+\right]^2.
+```
+
+and
+
+```math
+\chi_I^2=
+\sum_j
+\frac{
+[I_j^{\rm obs}-I_j^{\rm model}]^2
+}{
+\sigma_{I,j}^2
+}.
+```
+
+We choose to ignore the correlation and treat all measurements as statistically independent. This is largely true when the impulse response is averaged from many measurements. 
+
+
+Since our model is mostly a black-box (not differentiable), the best choice for a python MCMC package is emcee, which doesn't need to know the internal structure of the model. 
+
 
 ## Modeled Systems
 
@@ -396,7 +472,7 @@ LOG_STDOUT        | info    | usage: ./System_LMO_exe
 |                 | |       | | <-ipopt_max_iter=value> or <-ipopt_max_iter value>
 |                 | |       | |   value specifies the max number of iteration for ipopt
 |                 | |       | | <-ipopt_warm_start=value> or <-ipopt_warm_start value>
-|                 | |       | |   value specifies lvl for a warm start in ipopt: 1,2,3,...
+|                 | |       | |   value specifies lvl for a warm start in ipopt: 1,2,3,\cdots
 |                 | |       | | <-jacobian=value> or <-jacobian value>
 |                 | |       | |   select the calculation method of the Jacobian used only by ida and dassl solver.
 |                 | |       | | <-jacobianThreads=value> or <-jacobianThreads value>
