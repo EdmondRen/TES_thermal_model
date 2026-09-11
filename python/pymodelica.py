@@ -1,5 +1,8 @@
 import importlib.util
 import re
+import shutil
+import subprocess
+import tempfile
 import warnings
 from pathlib import Path
 
@@ -67,7 +70,7 @@ class TESModel:
     by impedance, responsivity, and noise calculations.
     """
 
-    def __init__(self, linearized_model_filename, full_model_filename, simulation_results_filename, config, f_min = 1, f_max = 100e3, points = 1000):
+    def __init__(self, linearized_model_filename, full_model_filename, simulation_results_filename, config, f_min = 1, f_max = 100e3, points = 1000, frequencies : np.ndarray | None = None):
         """
         Create a TES frequency-domain model.
 
@@ -97,11 +100,11 @@ class TESModel:
             analysis. Currently stored on the instance for caller use; expected
             keys include ``"L"`` and ``"RL"`` for inductance and load/shunt
             resistance.
-        f_min, f_max : float, optional
+        f_min, f_max , points: float, optional
             Minimum and maximum frequencies in Hz for the logarithmic analysis
-            grid.
-        points : int, optional
-            Number of frequency samples between ``f_min`` and ``f_max``.
+            grid; Number of frequency samples between ``f_min`` and ``f_max``.
+        frequencies: list | np.ndarray | None
+            Frequency grid to evaluate the model, has higher priority than (f_min, f_max and points). If frequencies is given, will ignore the frequency range 
 
         Attributes
         ----------
@@ -117,7 +120,10 @@ class TESModel:
         timesteps, self.simulation_results = load(simulation_results_filename)
         self.config = config
         
-        self.frequencies = np.logspace(np.log10(f_min), np.log10(f_max), points)
+        if frequencies is None:
+            self.frequencies = np.logspace(np.log10(f_min), np.log10(f_max), points)
+        else:
+            self.frequencies = frequencies
         self.iw = 2j*np.pi*self.frequencies
 
         # Load models
@@ -501,6 +507,425 @@ class TESModel:
         
         return T, y
 
+
+
+class TESMCMCFit:
+    """
+    Black-box MCMC wrapper for fitting TES Modelica parameters.
+
+    The class evaluates a parameter vector by writing an OpenModelica override
+    file, running the compiled model to equilibrium, running a fine transient
+    from that equilibrium, and comparing selected observables to measurements.
+    """
+
+    def __init__(
+        self,
+        model_exe,
+        build_dir,
+        full_model_file,
+        base_override_file,
+        equilibrium_time=20.0,
+        fine_stop_time=0.1,
+        coarse_step_size=2e-4,
+        fine_step_size=1e-6,
+        tolerance=1e-8,
+        solver="dassl",
+        linearized_model_file="linearized_model.py",
+        init_result_file=None,
+        pulse_result_file=None,
+        tes_config=None,
+        tes_model_kwargs=None,
+        keep_runs=False,
+        extra_coarse_args=None,
+        extra_fine_args=None,
+    ):
+        self.build_dir = Path(build_dir).resolve()
+        self.model_exe = Path(model_exe)
+        if not self.model_exe.is_absolute():
+            self.model_exe = self.build_dir / self.model_exe
+
+        self.model_name = self.model_exe.name
+        self.full_model_file = Path(full_model_file).resolve()
+        self.base_override_file = Path(base_override_file).resolve()
+        self.equilibrium_time = equilibrium_time
+        self.fine_stop_time = fine_stop_time
+        self.coarse_step_size = coarse_step_size
+        self.fine_step_size = fine_step_size
+        self.tolerance = tolerance
+        self.solver = solver
+        self.linearized_model_file = linearized_model_file
+        self.init_result_file = init_result_file or f"{self.model_name}_res_init.mat"
+        self.pulse_result_file = pulse_result_file or f"{self.model_name}_res_final.mat"
+        self.tes_config = {} if tes_config is None else dict(tes_config)
+        self.tes_model_kwargs = {} if tes_model_kwargs is None else dict(tes_model_kwargs)
+        self.keep_runs = keep_runs
+        self.extra_coarse_args = list(extra_coarse_args or [])
+        self.extra_fine_args = list(extra_fine_args or [])
+
+        self.parameter_names = []
+        self.priors = {}
+        self.initial = None
+        self.transforms = {}
+        self.measurements = {}
+        self.last_result = None
+        self.last_chi2 = {}
+        self.last_error = None
+
+    def set_parameters(self, names, priors, initial=None, transform=None):
+        """
+        Set fitted parameter names and scipy.stats-style frozen priors.
+        """
+        self.parameter_names = list(names)
+        self.priors = dict(priors)
+        self.transforms = {name: "linear" for name in self.parameter_names}
+        if transform is not None:
+            self.transforms.update(transform)
+
+        missing = [name for name in self.parameter_names if name not in self.priors]
+        if missing:
+            raise ValueError(f"Missing priors for parameters: {missing}")
+
+        bad_transforms = {
+            name: value
+            for name, value in self.transforms.items()
+            if value not in ("linear", "log")
+        }
+        if bad_transforms:
+            raise ValueError(f"Unsupported transforms: {bad_transforms}")
+
+        if initial is not None:
+            self.initial = self._coerce_initial(initial)
+
+        return self
+
+    def set_measurements(self, measurements):
+        """
+        Set measurement blocks for bias power, impedance, and pulse response.
+        """
+        self.measurements = dict(measurements)
+        return self
+
+    def _coerce_theta(self, theta):
+        if isinstance(theta, dict):
+            values = [theta[name] for name in self.parameter_names]
+        else:
+            values = theta
+        return np.asarray(values, dtype=float)
+
+    def _coerce_initial(self, initial):
+        if not isinstance(initial, dict):
+            return self._coerce_theta(initial)
+
+        values = []
+        for name in self.parameter_names:
+            value = float(initial[name])
+            if self.transforms.get(name, "linear") == "log":
+                if value <= 0:
+                    raise ValueError(f"Initial value for log parameter {name} must be > 0")
+                values.append(np.log(value))
+            else:
+                values.append(value)
+        return np.asarray(values, dtype=float)
+
+    def theta_to_params(self, theta):
+        theta = self._coerce_theta(theta)
+        if len(theta) != len(self.parameter_names):
+            raise ValueError(
+                f"Expected {len(self.parameter_names)} parameters, got {len(theta)}"
+            )
+
+        params = {}
+        for name, value in zip(self.parameter_names, theta):
+            if self.transforms.get(name, "linear") == "log":
+                params[name] = float(np.exp(value))
+            else:
+                params[name] = float(value)
+        return params
+
+    def log_prior(self, theta):
+        theta = self._coerce_theta(theta)
+        try:
+            params = self.theta_to_params(theta)
+        except (ValueError, OverflowError):
+            return -np.inf
+
+        total = 0.0
+        for theta_value, (name, value) in zip(theta, params.items()):
+            prior = self.priors[name]
+            logp = prior.logpdf(value)
+            if not np.isfinite(logp):
+                return -np.inf
+            total += logp
+            if self.transforms.get(name, "linear") == "log":
+                total += theta_value
+        return float(total)
+
+    def _write_override_file(self, params, run_dir):
+        run_dir = Path(run_dir)
+        output = run_dir / "mcmc_override.txt"
+        seen = set()
+        lines = []
+
+        if self.base_override_file.exists():
+            for line in self.base_override_file.read_text().splitlines():
+                match = re.match(r"^(\s*)([A-Za-z_]\w*)\s*=", line)
+                if match and match.group(2) in params:
+                    name = match.group(2)
+                    lines.append(f"{name}={params[name]:.17g}")
+                    seen.add(name)
+                else:
+                    lines.append(line)
+
+        for name in self.parameter_names:
+            if name not in seen:
+                lines.append(f"{name}={params[name]:.17g}")
+
+        output.write_text("\n".join(lines) + "\n")
+        return output
+
+    def _prepare_run_dir(self):
+        run_dir = Path(tempfile.mkdtemp(prefix="tes_mcmc_", dir=self.build_dir))
+
+        required = [
+            self.model_exe,
+            self.build_dir / f"{self.model_name}_init.xml",
+            self.build_dir / f"{self.model_name}_info.json",
+            self.build_dir / f"{self.model_name}_JacA.bin",
+        ]
+
+        for source in required:
+            if source.exists():
+                shutil.copy2(source, run_dir / source.name)
+
+        return run_dir
+
+    def _run_subprocess(self, args, run_dir):
+        return subprocess.run(
+            args,
+            cwd=run_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def run_model(self, params):
+        """
+        Run coarse equilibrium, linearization, and fine pulse simulation.
+        """
+        run_dir = self._prepare_run_dir()
+        logs = {}
+
+        try:
+            override_file = self._write_override_file(params, run_dir)
+            exe = f"./{self.model_name}"
+
+            coarse_args = [
+                exe,
+                f"-overrideFile={override_file.name}",
+                "-startTime=0",
+                f"-stopTime={self.equilibrium_time}",
+                f"-stepSize={self.coarse_step_size}",
+                f"-tolerance={self.tolerance}",
+                f"-s={self.solver}",
+                "-w",
+                "-outputFormat=mat",
+                f"-r={self.init_result_file}",
+                f"-l={self.equilibrium_time}",
+            ] + self.extra_coarse_args
+            logs["coarse"] = self._run_subprocess(coarse_args, run_dir)
+
+            fine_args = [
+                exe,
+                f"-r={self.pulse_result_file}",
+                f"-overrideFile={override_file.name}",
+                f"-s={self.solver}",
+                "-w",
+                "-startTime=0",
+                f"-stopTime={self.fine_stop_time}",
+                f"-stepSize={self.fine_step_size}",
+                f"-tolerance={self.tolerance}",
+                f"-iif={self.init_result_file}",
+                f"-iit={self.equilibrium_time}",
+                "-lv=-LOG_STDOUT",
+            ] + self.extra_fine_args
+            logs["fine"] = self._run_subprocess(fine_args, run_dir)
+
+            result = {
+                "run_dir": run_dir,
+                "override_file": override_file,
+                "init_result": run_dir / self.init_result_file,
+                "pulse_result": run_dir / self.pulse_result_file,
+                "linearized_model": run_dir / self.linearized_model_file,
+                "logs": logs,
+                "params": dict(params),
+            }
+            self.last_result = result
+            self.last_error = None
+            return result
+
+        except Exception as exc:
+            self.last_error = exc
+            if not self.keep_runs:
+                shutil.rmtree(run_dir, ignore_errors=True)
+            return None
+
+    @staticmethod
+    def _as_array(value):
+        return np.asarray(value, dtype=float)
+
+    @staticmethod
+    def _sigma_array(value, shape):
+        if value is None:
+            return np.ones(shape, dtype=float)
+        sigma = np.asarray(value, dtype=float)
+        if sigma.shape == ():
+            return np.ones(shape, dtype=float) * float(sigma)
+        return sigma
+
+    def _chi2_bias_power(self, init_data, block):
+        model_key = block.get("model_key", "c1.P_Joule")
+        model_value = np.asarray(init_data[model_key])[-1]
+        sigma = block["sigma"]
+        return float(((block["value"] - model_value) / sigma) ** 2)
+
+    def _chi2_pulse(self, pulse_time, pulse_data, block):
+        model_key = block.get("model_key", "L.i")
+        model_values = self._as_array(pulse_data[model_key])
+        if block.get("baseline", "subtract_initial") == "subtract_initial":
+            model_values = model_values - model_values[0]
+
+        time = self._as_array(block["time"])
+        values = self._as_array(block["values"])
+        sigma = self._sigma_array(block.get("sigma"), values.shape)
+        model_interp = np.interp(time, pulse_time, model_values)
+        residual = (values - model_interp) / sigma
+        return float(np.sum(residual ** 2))
+
+    def _chi2_impedance(self, result, init_result, block):
+        frequencies = self._as_array(block["frequencies"])
+        values = np.asarray(block["values"], dtype=complex)
+        model_kwargs = dict(self.tes_model_kwargs)
+        if "f_min" not in model_kwargs:
+            model_kwargs["f_min"] = float(np.min(frequencies))
+        if "f_max" not in model_kwargs:
+            model_kwargs["f_max"] = float(np.max(frequencies))
+        if "points" not in model_kwargs:
+            model_kwargs["points"] = max(200, len(frequencies))
+
+        model = TESModel(
+            result["linearized_model"],
+            self.full_model_file,
+            init_result,
+            config=self.tes_config,
+            **model_kwargs,
+        )
+
+        observable = block.get("observable", "impedance")
+        if observable == "impedance":
+            model_values = model.get_impedance()
+        elif observable == "dIdV":
+            model_values = model.get_dIdV()
+        else:
+            raise ValueError(f"Unsupported impedance observable: {observable}")
+
+        real_interp = np.interp(frequencies, model.frequencies, model_values.real)
+        imag_interp = np.interp(frequencies, model.frequencies, model_values.imag)
+        sigma_real = self._sigma_array(block.get("sigma_real"), values.real.shape)
+        sigma_imag = self._sigma_array(block.get("sigma_imag"), values.imag.shape)
+        chi2_real = ((values.real - real_interp) / sigma_real) ** 2
+        chi2_imag = ((values.imag - imag_interp) / sigma_imag) ** 2
+        return float(np.sum(chi2_real) + np.sum(chi2_imag))
+
+    def log_likelihood(self, theta):
+        params = self.theta_to_params(theta)
+        result = self.run_model(params)
+        if result is None:
+            self.last_chi2 = {}
+            return -np.inf
+
+        try:
+            init_time, init_data = load(result["init_result"])
+            pulse_time, pulse_data = load(result["pulse_result"])
+
+            chi2 = {}
+            if "bias_power" in self.measurements:
+                chi2["bias_power"] = self._chi2_bias_power(
+                    init_data,
+                    self.measurements["bias_power"],
+                )
+            if "pulse" in self.measurements:
+                chi2["pulse"] = self._chi2_pulse(
+                    pulse_time,
+                    pulse_data,
+                    self.measurements["pulse"],
+                )
+            if "impedance" in self.measurements:
+                chi2["impedance"] = self._chi2_impedance(
+                    result,
+                    result["init_result"],
+                    self.measurements["impedance"],
+                )
+
+            self.last_chi2 = chi2
+            self.last_error = None
+            return float(-0.5 * sum(chi2.values()))
+
+        except Exception as exc:
+            self.last_error = exc
+            self.last_chi2 = {}
+            return -np.inf
+
+        finally:
+            if not self.keep_runs:
+                shutil.rmtree(result["run_dir"], ignore_errors=True)
+
+    def log_probability(self, theta):
+        logp = self.log_prior(theta)
+        if not np.isfinite(logp):
+            return -np.inf
+
+        logl = self.log_likelihood(theta)
+        if not np.isfinite(logl):
+            return -np.inf
+
+        return float(logp + logl)
+
+    def initial_walkers(self, nwalkers, initial=None, scatter=1e-3):
+        if initial is None:
+            if self.initial is None:
+                raise ValueError("Provide initial or call set_parameters(..., initial=...)")
+            center = self.initial
+        else:
+            center = self._coerce_initial(initial)
+
+        center = np.asarray(center, dtype=float)
+        ndim = len(center)
+        scale = np.where(center != 0, np.abs(center) * scatter, scatter)
+        return center + scale * np.random.randn(nwalkers, ndim)
+
+    def run_mcmc(
+        self,
+        nwalkers,
+        nsteps,
+        initial=None,
+        scatter=1e-3,
+        progress=True,
+        **sampler_kwargs,
+    ):
+        try:
+            import emcee
+        except ImportError as exc:
+            raise ImportError("Install emcee with: pip install emcee") from exc
+
+        initial_state = self.initial_walkers(nwalkers, initial=initial, scatter=scatter)
+        sampler = emcee.EnsembleSampler(
+            nwalkers,
+            len(self.parameter_names),
+            self.log_probability,
+            **sampler_kwargs,
+        )
+        sampler.run_mcmc(initial_state, nsteps, progress=progress)
+        return sampler
 
 
 def load(filename):
