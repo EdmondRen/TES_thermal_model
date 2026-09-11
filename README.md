@@ -257,13 +257,13 @@ The same concept applies to noise, you just need to set the appropriate excitati
 
 #### 5.2.1 Johnson noise
 
-There load resistor and TES resistance both produces Johnson noise with a **one-sided** power spectral density of $ \overline{V_n^2} = 4k_B T R \Delta f$. But they correspond to 
+There load resistor and TES resistance both produces Johnson noise with a **one-sided** power spectral density of $\overline{V_n^2} = 4k_B T R \Delta f$. But they correspond to 
 different external input. Load resistor noise is $\delta V_{ext}$, while TES noise is $\delta V_{int}$.
 
 
 #### 5.2.2 Thermal fluctuation noise (TFN)
 
-For all cases where the temperature difference between two adjoining heat capacity blocks is a step function (ballistic phonons, e-p interaction, Kapitza resistance), the **one-sided** TFN power spectral density is well approximated $ \overline{P_n^2} = 2 k_B (G_1 T_1^2 + G_2 T_2^2) \Delta f $. (BOYLE, WS, and KF RODGERS. "Performance characteristics of a new low-temperature bolometer." SPIE milestone series 179 (2004): 290-291.). It reduces to $4 k_B G T^2$ for a single body in thermal equilibrium, and can be derived from $\langle\Delta E^2\rangle=k_BT^2C$.
+For all cases where the temperature difference between two adjoining heat capacity blocks is a step function (ballistic phonons, e-p interaction, Kapitza resistance), the **one-sided** TFN power spectral density is well approximated $\overline{P_n^2} = 2 k_B (G_1 T_1^2 + G_2 T_2^2) \Delta f$. (BOYLE, WS, and KF RODGERS. "Performance characteristics of a new low-temperature bolometer." SPIE milestone series 179 (2004): 290-291.). It reduces to $4 k_B G T^2$ for a single body in thermal equilibrium, and can be derived from $\langle\Delta E^2\rangle=k_BT^2C$.
 
 Away from equilibrium, the simple formula is only approximate. https://pubmed.ncbi.nlm.nih.gov/20389816/
 
@@ -315,13 +315,13 @@ with
 =
 \sum_i
 \left[
-\frac{\operatorname{Re}(Z_i^{\rm obs}-Z_i^{\rm model})}
-{\sigma_{\operatorname{Re},i}}
+\frac{\mathrm{Re}(Z_i^{\rm obs}-Z_i^{\rm model})}
+{\sigma_{\mathrm{Re},i}}
 \right]^2
 +
 \left[
-\frac{\operatorname{Im}(Z_i^{\rm obs}-Z_i^{\rm model})}
-{\sigma_{\operatorname{Im},i}}
+\frac{\mathrm{Im}(Z_i^{\rm obs}-Z_i^{\rm model})}
+{\sigma_{\mathrm{Im},i}}
 \right]^2.
 ```
 
