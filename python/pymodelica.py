@@ -1627,17 +1627,17 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
             replace_text = f">G={data[f'g{i}.G'][-1]:.3g} <"
             content = content.replace(search_text, replace_text)
         
-        for i in range(1, 9+1):
+        for i in range(1, 10+1):
             search_text = f">m=m{i} <"
             replace_text = f">C={data[f'c{i}.C'][-1]:.3g} <"
             content = content.replace(search_text, replace_text)
             
         search_text = f">  m=TES_m <"
-        replace_text = f">  C={data[f'c10.C'][-1]:.3g} <"
+        replace_text = f">  C={data[f'c1.C'][-1]:.3g} <"
         content = content.replace(search_text, replace_text)
         
         search_text = f">  Tc=TES_Tc <"
-        replace_text = f">  T={data[f'c10.T'][-1]:.3g} <"
+        replace_text = f">  T={data[f'c1.T'][-1]:.3g} <"
         content = content.replace(search_text, replace_text)
         
         
