@@ -405,7 +405,7 @@ class TESModel:
         self.noise_source_vectors["TJN"] = np.zeros(self.nparams)
         vn2 = 4.*scipy.constants.k * TES_T0*TES_R0 * (1+2*TES_beta)
         self.noise_source_vectors["TJN"][1] = np.sqrt(vn2) 
-        self.noise_source_vectors["TJN"][2] = np.sqrt(vn2)*TES_I
+        self.noise_source_vectors["TJN"][2] = -np.sqrt(vn2)*TES_I
 
         ## 2. Phonon noise
         for i in self.model_conductance_map:
@@ -1754,25 +1754,45 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
     # Replace the target text
     # updated_content = content.replace(search_text, replace_text)
     
+    # Find a list of c and g
+    ind_cs = []
+    ind_gs = []
+    for key in data:
+        m_c = re.fullmatch(r"c(\d+)\.C", key)
+        m_g = re.fullmatch(r"g(\d+)\.G", key)
+        if m_c:
+            ind_cs.append(int(m_c.group(1)))
+        if m_g:
+            ind_gs.append(int(m_g.group(1)))
+    
     ## Define for each system name the corresponding replacement rules
     if system_name == "System_LMO":
-        for i in range(1, 14+1):
-            search_text = f">K=K{i} <"
-            replace_text = f">G={data[f'g{i}.G'][-1]:.3g} <"
+        search_text = f"m=TES_m"
+        replace_text = f"C={data[f'c1.C'][-1]:.3g}"
+        content = content.replace(search_text, replace_text)
+        
+        search_text = f"=TES_Tc"
+        replace_text = f"={data[f'c1.T'][-1]:.3g}"
+        content = content.replace(search_text, replace_text)
+        
+                
+        for i in ind_gs:
+            search_text = f"K=K{i}"
+            replace_text = f"G={data[f'g{i}.G'][-1]:.3g}"
             content = content.replace(search_text, replace_text)
         
-        for i in range(1, 10+1):
-            search_text = f">m=m{i} <"
-            replace_text = f">C={data[f'c{i}.C'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
+        for i in ind_cs:
+            if i!=1:
+                search_text = f"m=m{i}"
+                replace_text = f"C={data[f'c{i}.C'][-1]:.3g}"
+                content = content.replace(search_text, replace_text)
+                # print(search_text,data[f'c{i}.C'][-1])
             
-        search_text = f">  m=TES_m <"
-        replace_text = f">  C={data[f'c1.C'][-1]:.3g} <"
-        content = content.replace(search_text, replace_text)
-        
-        search_text = f">  Tc=TES_Tc <"
-        replace_text = f">  T={data[f'c1.T'][-1]:.3g} <"
-        content = content.replace(search_text, replace_text)
+            # Add temperature
+            search_text = f">c{i}<"
+            replace_text = f">c{i} {data[f'c{i}.T'][-1]*1000:.3g}mK<"
+            content = content.replace(search_text, replace_text)            
+
         
         
 

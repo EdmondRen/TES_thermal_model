@@ -187,7 +187,7 @@ The first term $V_{C_L}$ is the voltage across the parasitic capacitance of the 
 ```math
 \frac{d}{dt} 
 \begin{pmatrix}
-\Delta V_{TES} \\ \Delta I_{TES} \\ \Delta T_{1} \\ \Delta T_2 \\ \vdots \\ \Delta T_n
+\Delta V_{C_L} \\ \Delta I_{TES} \\ \Delta T_{1} \\ \Delta T_2 \\ \vdots \\ \Delta T_n
 \end{pmatrix}
 
 =

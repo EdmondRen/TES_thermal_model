@@ -1110,7 +1110,7 @@ font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal"
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-16.75" y="-29.6875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >Rn=TES_Rn </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-16.75" y="-18.6875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >  Tc=TES_Tc, I0=TES_I0 </text>
+ >  Tc=0.0202, I0=TES_I0 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-16.75" y="-7.6875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >  </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-12.375" y="-7.6875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
@@ -1122,7 +1122,7 @@ font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal"
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="46.8438" y="-7.6875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >TES_beta </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-16.75" y="3.3125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >  C=6.72e-15 </text>
+ >  C=6.59e-15 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-16.75" y="14.3125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >  a1=TES_a1 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-16.75" y="25.3125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
@@ -1209,7 +1209,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="14.7536" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.5" y="6.21875" font-family="Segoe UI" font-size="14.7536" font-weight="400" font-style="normal" 
- >c1</text>
+ >c1 20.2mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0,0.364286,-0.364286,0,591.379,126.986)"
@@ -1914,7 +1914,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.6875" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=1.9e-11 </text>
+ >G=1.22e-082 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=4</text>
 </g>
@@ -2091,7 +2091,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.6875" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=1.88e-11 </text>
+ >G=1.22e-083 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=4</text>
 </g>
@@ -2268,7 +2268,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.6875" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=5.47e-08 </text>
+ >G=1.22e-084 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=4</text>
 </g>
@@ -2418,7 +2418,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-8.9375" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c10</text>
+ >c10 12mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,168.443,112.414)"
@@ -2532,7 +2532,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c2</text>
+ >c2 12.2mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,263.157,112.414)"
@@ -2549,7 +2549,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.4063" y="-6.375" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >C=6.57e-11 </text>
+ >C=6.56e-11 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-22.5938" y="4.625" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >  a1=a1_gold</text>
 </g>
@@ -2646,7 +2646,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c3</text>
+ >c3 12.2mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,350.586,112.414)"
@@ -2760,7 +2760,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c4</text>
+ >c4 12.2mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,474.443,112.414)"
@@ -2874,7 +2874,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c6</text>
+ >c6 13.1mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,634.729,112.414)"
@@ -2891,7 +2891,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.4063" y="-6.375" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >C=4.63e-16 </text>
+ >C=4.61e-16 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-22.5938" y="4.625" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >  a1=a1_gold</text>
 </g>
@@ -2988,7 +2988,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c5</text>
+ >c5 12.1mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,627.443,221.7)"
@@ -3102,7 +3102,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c7</text>
+ >c7 12mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0.364286,0,0,0.364286,722.157,112.414)"
@@ -3216,7 +3216,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c9</text>
+ >c9 12mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0,-0.364286,0.364286,0,356.414,403.843)"
@@ -3330,7 +3330,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
 >
 <text fill="#0000ff" fill-opacity="1" stroke="none" xml:space="preserve" x="-5.78125" y="37.3281" font-family="Segoe UI" font-size="10.9286" font-weight="700" font-style="normal" 
- >c8</text>
+ >c8 12mK</text>
 </g>
 
 <g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" transform="matrix(0,-0.364286,0.364286,0,662.414,396.557)"
@@ -4367,7 +4367,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-9.53125" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=8.95e-12 </text>
+ >G=8.91e-12 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=5</text>
 </g>
@@ -4544,7 +4544,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-9.53125" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=2.39e-14 </text>
+ >G=2.18e-14 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=6</text>
 </g>
@@ -4721,7 +4721,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-9.53125" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=3.29e-10 </text>
+ >G=3.23e-10 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=2</text>
 </g>
@@ -4898,7 +4898,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-9.53125" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=1.8e-09 </text>
+ >G=1.79e-09 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=2</text>
 </g>
@@ -5075,7 +5075,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.6875" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=1.5e-11 </text>
+ >G=1.22e-081 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=5</text>
 </g>
@@ -5252,7 +5252,7 @@ font-family="Segoe UI" font-size="9" font-weight="400" font-style="normal"
 font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
 >
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-11.6875" y="-2.1875" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
- >G=1.35e-06 </text>
+ >G=1.22e-080 </text>
 <text fill="#000000" fill-opacity="1" stroke="none" xml:space="preserve" x="-7.14063" y="8.8125" font-family="Segoe UI" font-size="8" font-weight="400" font-style="normal" 
  >n=2</text>
 </g>
