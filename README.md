@@ -205,7 +205,7 @@ The first term $V_{C_L}$ is the voltage across the parasitic capacitance of the 
 \end{pmatrix}
 + 
 \begin{pmatrix}
-\delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
+\delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ (\delta P_{1} - I_{TES}\delta V_{int} )/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
 \end{pmatrix}
 ```
 
@@ -232,7 +232,7 @@ We can solve these equations in Fourier space easily. After Fourier transform, d
 \end{pmatrix}
 + 
 \begin{pmatrix}
-\delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ \delta P_{1}/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
+\delta V_{ext}/R_LC_L \\ \delta V_{int}/L \\ (\delta P_{1} - I_{TES}\delta V_{int} )/C_1 \\ \delta P_2/C_2 \\ \vdots \\ \delta P_n/C_n
 \end{pmatrix}
 ```
 

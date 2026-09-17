@@ -63,7 +63,6 @@ package libTES
     parameter Modelica.Units.SI.Current I0 "Current where beta0 is evaluated";
     parameter Real alpha0;
     parameter Real beta0 = 1;
-  
     // Heat capacity
     parameter Modelica.Units.SI.Mass m(displayUnit = "ug") = 1;
     parameter Real a1 = 0;
@@ -82,7 +81,7 @@ package libTES
     p.i = i;
     n.i = -i;
 // TES Resistance. Joule heating generated internally
-    R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc) - (i-I0)*beta0/I0);
+    R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc) - (i - I0)*beta0/I0);
     v = R*i;
     P_Joule = v*i;
 // Heat capacity (temperature dependent)
@@ -144,7 +143,7 @@ n=%n"), Text(origin = {0, 39}, textColor = {0, 0, 127}, extent = {{-44, 20}, {44
     C*der(T) = port.Q_flow;
     annotation(
       Diagram(graphics),
-      Icon(graphics = {Polygon(lineColor = {160, 160, 164}, fillColor = {192, 192, 192}, fillPattern = FillPattern.Solid, points = {{0, 67}, {-20, 63}, {-40, 57}, {-52, 43}, {-58, 35}, {-68, 25}, {-72, 13}, {-76, -1}, {-78, -15}, {-76, -31}, {-76, -43}, {-76, -53}, {-70, -65}, {-64, -73}, {-48, -77}, {-30, -83}, {-18, -83}, {-2, -85}, {8, -89}, {22, -89}, {32, -87}, {42, -81}, {54, -75}, {56, -73}, {66, -61}, {68, -53}, {70, -51}, {72, -35}, {76, -21}, {78, -13}, {78, 3}, {74, 15}, {66, 25}, {54, 33}, {44, 41}, {36, 57}, {26, 65}, {0, 67}}), Polygon(fillColor = {160, 160, 164}, fillPattern = FillPattern.Solid, points = {{-58, 35}, {-68, 25}, {-72, 13}, {-76, -1}, {-78, -15}, {-76, -31}, {-76, -43}, {-76, -53}, {-70, -65}, {-64, -73}, {-48, -77}, {-30, -83}, {-18, -83}, {-2, -85}, {8, -89}, {22, -89}, {32, -87}, {42, -81}, {54, -75}, {42, -77}, {40, -77}, {30, -79}, {20, -81}, {18, -81}, {10, -81}, {2, -77}, {-12, -73}, {-22, -73}, {-30, -71}, {-40, -65}, {-50, -55}, {-56, -43}, {-58, -35}, {-58, -25}, {-60, -13}, {-60, -5}, {-60, 7}, {-58, 17}, {-56, 19}, {-52, 27}, {-48, 35}, {-44, 45}, {-40, 57}, {-58, 35}}), Text(origin = {2, -58},textColor = {0, 0, 255}, extent = {{-150, 110}, {150, 70}}, textString = "%name", textStyle = {TextStyle.Bold}), Text(origin = {-2, -11}, extent = {{-61, 10}, {63, -33}}, textString = "m=%m
+      Icon(graphics = {Polygon(lineColor = {160, 160, 164}, fillColor = {192, 192, 192}, fillPattern = FillPattern.Solid, points = {{0, 67}, {-20, 63}, {-40, 57}, {-52, 43}, {-58, 35}, {-68, 25}, {-72, 13}, {-76, -1}, {-78, -15}, {-76, -31}, {-76, -43}, {-76, -53}, {-70, -65}, {-64, -73}, {-48, -77}, {-30, -83}, {-18, -83}, {-2, -85}, {8, -89}, {22, -89}, {32, -87}, {42, -81}, {54, -75}, {56, -73}, {66, -61}, {68, -53}, {70, -51}, {72, -35}, {76, -21}, {78, -13}, {78, 3}, {74, 15}, {66, 25}, {54, 33}, {44, 41}, {36, 57}, {26, 65}, {0, 67}}), Polygon(fillColor = {160, 160, 164}, fillPattern = FillPattern.Solid, points = {{-58, 35}, {-68, 25}, {-72, 13}, {-76, -1}, {-78, -15}, {-76, -31}, {-76, -43}, {-76, -53}, {-70, -65}, {-64, -73}, {-48, -77}, {-30, -83}, {-18, -83}, {-2, -85}, {8, -89}, {22, -89}, {32, -87}, {42, -81}, {54, -75}, {42, -77}, {40, -77}, {30, -79}, {20, -81}, {18, -81}, {10, -81}, {2, -77}, {-12, -73}, {-22, -73}, {-30, -71}, {-40, -65}, {-50, -55}, {-56, -43}, {-58, -35}, {-58, -25}, {-60, -13}, {-60, -5}, {-60, 7}, {-58, 17}, {-56, 19}, {-52, 27}, {-48, 35}, {-44, 45}, {-40, 57}, {-58, 35}}), Text(origin = {2, -58}, textColor = {0, 0, 255}, extent = {{-150, 110}, {150, 70}}, textString = "%name", textStyle = {TextStyle.Bold}), Text(origin = {-2, -11}, extent = {{-61, 10}, {63, -33}}, textString = "m=%m
   a1=%a1")}));
   end HeatCapacitorPoly;
 
@@ -169,4 +168,122 @@ n=%n"), Text(origin = {0, 39}, textColor = {0, 0, 127}, extent = {{-44, 20}, {44
   </div>
   </html>"));
   end SourceExp;
+
+  model ThermalConductanceWireEPH
+    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a port_a_e(T(displayUnit = "mK")) annotation(
+      Placement(transformation(origin = {0, 30}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(origin = {0, 40}, extent = {{-110, -10}, {-90, 10}})));
+    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_b port_b_e(T(displayUnit = "mK")) annotation(
+      Placement(transformation(origin = {200, 30}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(origin = {200, 40}, extent = {{-110, -10}, {-90, 10}})));
+    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a port_a_ph(T(displayUnit = "mK")) annotation(
+      Placement(transformation(origin = {0, 4}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(origin = {0, -40}, extent = {{-110, -10}, {-90, 10}})));
+    Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_b port_b_ph(T(displayUnit = "mK")) annotation(
+      Placement(transformation(origin = {200, 4}, extent = {{-110, -10}, {-90, 10}}), iconTransformation(origin = {200, -40}, extent = {{-110, -10}, {-90, 10}})));
+    ThermlConductanceN g_e0(K = K_e0, n = n_e0) annotation(
+      Placement(transformation(origin = {-76, 30}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_ph0(K = K_ph0, n = n_ph0) annotation(
+      Placement(transformation(origin = {-76, 4}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_eph1(K = K_eph0, n = n_eph0) annotation(
+      Placement(transformation(origin = {-62, 16}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
+    HeatCapacitorPoly c_e1(m = m_e0, a1 = a1_e0) annotation(
+      Placement(transformation(origin = {-56, 44}, extent = {{-10, -10}, {10, 10}})));
+    libTES.HeatCapacitorPoly c_ph1(m = m_ph0, a3 = a3_ph0) annotation(
+      Placement(transformation(origin = {-56, -10}, extent = {{-10, -10}, {10, 10}}, rotation = 180)));
+    libTES.ThermlConductanceN g_e1(K = K_e0, n = n_e0) annotation(
+      Placement(transformation(origin = {-38, 30}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_ph1(K = K_ph0, n = n_ph0) annotation(
+      Placement(transformation(origin = {-38, 4}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_eph2(K = K_eph0, n = n_eph0) annotation(
+      Placement(transformation(origin = {-24, 16}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
+    libTES.HeatCapacitorPoly c_e2(a1 = a1_e0, m = m_e0) annotation(
+      Placement(transformation(origin = {-18, 42}, extent = {{-10, -10}, {10, 10}})));
+    libTES.HeatCapacitorPoly c_ph2(a1 = a1_ph0, m = m_ph0) annotation(
+      Placement(transformation(origin = {-18, -8}, extent = {{-10, -10}, {10, 10}}, rotation = 180)));
+    libTES.ThermlConductanceN g_e2(K = K_e0, n = n_e0) annotation(
+      Placement(transformation(origin = {2, 30}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_ph2(K = K_ph0, n = n_ph0) annotation(
+      Placement(transformation(origin = {2, 4}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_eph3(K = K_eph0, n = n_eph0) annotation(
+      Placement(transformation(origin = {16, 16}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
+    libTES.HeatCapacitorPoly c_e3(a1 = a1_e0, m = m_e0) annotation(
+      Placement(transformation(origin = {22, 42}, extent = {{-10, -10}, {10, 10}})));
+    libTES.HeatCapacitorPoly c_ph3(a1 = a1_ph0, m = m_ph0) annotation(
+      Placement(transformation(origin = {22, -8}, extent = {{-10, -10}, {10, 10}}, rotation = 180)));
+    libTES.ThermlConductanceN g_e3(K = K_e0, n = n_e0) annotation(
+      Placement(transformation(origin = {38, 30}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_ph3(K = K_ph0, n = n_ph0) annotation(
+      Placement(transformation(origin = {38, 4}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_eph4(K = K_eph0, n = n_eph0) annotation(
+      Placement(transformation(origin = {52, 16}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
+    libTES.HeatCapacitorPoly c_e4(a1 = a1_e0, m = m_e0) annotation(
+      Placement(transformation(origin = {58, 42}, extent = {{-10, -10}, {10, 10}})));
+    libTES.HeatCapacitorPoly c_ph4(a1 = a1_ph0, m = m_ph0) annotation(
+      Placement(transformation(origin = {58, -8}, extent = {{-10, -10}, {10, 10}}, rotation = 180)));
+    libTES.ThermlConductanceN g_e4(K = K_e0, n = n_e0) annotation(
+      Placement(transformation(origin = {78, 30}, extent = {{-10, -10}, {10, 10}})));
+    libTES.ThermlConductanceN g_ph4(K = K_ph0, n = n_ph0) annotation(
+      Placement(transformation(origin = {78, 4}, extent = {{-10, -10}, {10, 10}})));
+  equation
+    connect(g_e0.port_b, c_e1.port) annotation(
+      Line(points = {{-66, 30}, {-56, 30}, {-56, 34}}, color = {191, 0, 0}));
+    connect(g_eph1.port_a, g_e0.port_b) annotation(
+      Line(points = {{-62, 26}, {-62, 30}, {-66, 30}}, color = {191, 0, 0}));
+    connect(g_eph1.port_a, g_e1.port_a) annotation(
+      Line(points = {{-62, 26}, {-62, 30}, {-48, 30}}, color = {191, 0, 0}));
+    connect(g_ph0.port_b, g_eph1.port_b) annotation(
+      Line(points = {{-66, 4}, {-62, 4}, {-62, 6}}, color = {191, 0, 0}));
+    connect(c_ph1.port, g_ph1.port_a) annotation(
+      Line(points = {{-56, 0}, {-56, 4}, {-48, 4}}, color = {191, 0, 0}));
+    connect(c_ph1.port, g_ph0.port_b) annotation(
+      Line(points = {{-56, 0}, {-56, 4}, {-66, 4}}, color = {191, 0, 0}));
+    connect(c_e1.port, g_e1.port_a) annotation(
+      Line(points = {{-56, 34}, {-56, 30}, {-48, 30}}, color = {191, 0, 0}));
+    connect(g_e1.port_b, c_e2.port) annotation(
+      Line(points = {{-28, 30}, {-18, 30}, {-18, 32}}, color = {191, 0, 0}));
+    connect(g_e2.port_a, g_e1.port_b) annotation(
+      Line(points = {{-8, 30}, {-28, 30}}, color = {191, 0, 0}));
+    connect(g_eph2.port_a, g_e1.port_b) annotation(
+      Line(points = {{-24, 26}, {-24, 30}, {-28, 30}}, color = {191, 0, 0}));
+    connect(g_ph1.port_b, g_ph2.port_a) annotation(
+      Line(points = {{-28, 4}, {-8, 4}}, color = {191, 0, 0}));
+    connect(c_ph2.port, g_ph2.port_a) annotation(
+      Line(points = {{-18, 2}, {-18, 4}, {-8, 4}}, color = {191, 0, 0}));
+    connect(g_eph2.port_b, g_ph1.port_b) annotation(
+      Line(points = {{-24, 6}, {-24, 4}, {-28, 4}}, color = {191, 0, 0}));
+    connect(g_e2.port_b, c_e3.port) annotation(
+      Line(points = {{12, 30}, {22, 30}, {22, 32}}, color = {191, 0, 0}));
+    connect(g_e3.port_a, g_eph3.port_a) annotation(
+      Line(points = {{28, 30}, {16, 30}, {16, 26}}, color = {191, 0, 0}));
+    connect(g_e2.port_b, g_e3.port_a) annotation(
+      Line(points = {{12, 30}, {28, 30}}, color = {191, 0, 0}));
+    connect(g_ph2.port_b, c_ph3.port) annotation(
+      Line(points = {{12, 4}, {22, 4}, {22, 2}}, color = {191, 0, 0}));
+    connect(g_eph3.port_b, g_ph2.port_b) annotation(
+      Line(points = {{16, 6}, {16, 4}, {12, 4}}, color = {191, 0, 0}));
+    connect(g_ph2.port_b, g_ph3.port_a) annotation(
+      Line(points = {{12, 4}, {28, 4}}, color = {191, 0, 0}));
+    connect(g_e3.port_b, c_e4.port) annotation(
+      Line(points = {{48, 30}, {58, 30}, {58, 32}}, color = {191, 0, 0}));
+    connect(g_eph4.port_a, g_e3.port_b) annotation(
+      Line(points = {{52, 26}, {52, 30}, {48, 30}}, color = {191, 0, 0}));
+    connect(g_e3.port_b, g_e4.port_a) annotation(
+      Line(points = {{48, 30}, {68, 30}}, color = {191, 0, 0}));
+    connect(g_ph4.port_a, g_ph3.port_b) annotation(
+      Line(points = {{68, 4}, {48, 4}}, color = {191, 0, 0}));
+    connect(g_eph4.port_b, g_ph3.port_b) annotation(
+      Line(points = {{52, 6}, {52, 4}, {48, 4}}, color = {191, 0, 0}));
+    connect(c_ph4.port, g_ph4.port_a) annotation(
+      Line(points = {{58, 2}, {58, 4}, {68, 4}}, color = {191, 0, 0}));
+    connect(port_a_ph, g_ph0.port_a) annotation(
+      Line(points = {{-100, 4}, {-86, 4}}, color = {191, 0, 0}));
+    connect(g_e0.port_a, port_a_e) annotation(
+      Line(points = {{-86, 30}, {-100, 30}}, color = {191, 0, 0}));
+    connect(port_b_ph, g_ph4.port_b) annotation(
+      Line(points = {{100, 4}, {88, 4}}, color = {191, 0, 0}));
+    connect(g_e4.port_b, port_b_e) annotation(
+      Line(points = {{88, 30}, {100, 30}}, color = {191, 0, 0}));
+    annotation(
+      Diagram(coordinateSystem(extent = {{-100, -100}, {100, 100}})),
+      Icon(graphics = {Rectangle(origin = {0, 40}, lineColor = {170, 0, 0}, fillColor = {255, 255, 255}, pattern = LinePattern.None, fillPattern = FillPattern.Forward, extent = {{-68, 20}, {68, -20}}), Line(origin = {-79.5, 40}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Line(origin = {78.5, 40}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Text(origin = {-2, -86}, extent = {{-36, 18}, {36, -18}}, textString = "K=%K
+  n=%n"), Text(origin = {0, 79}, textColor = {0, 0, 127}, extent = {{-44, 20}, {44, -20}}, textString = "%name", textStyle = {TextStyle.Bold}), Rectangle(origin = {0, -40}, lineColor = {170, 0, 0}, fillColor = {255, 255, 255}, pattern = LinePattern.None, fillPattern = FillPattern.Forward, extent = {{-68, 20}, {68, -20}}), Line(origin = {-79.5, -40}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Line(origin = {78.5, -40}, points = {{-10.5, 0}, {11.5, 0}, {9.5, 0}}, color = {85, 0, 0}), Text(origin = {-79, 52}, extent = {{-15, 10}, {15, -10}}, textString = "e"), Text(origin = {-79, -30}, extent = {{-15, 10}, {15, -10}}, textString = "ph"), Line(origin = {1.02263, 1.43097}, points = {{-61.0226, 16.569}, {-41.0226, -17.431}, {-21.0226, 16.569}, {-1.02263, -17.431}, {18.9774, 16.569}, {38.9774, -17.431}, {58.9774, 16.569}, {60.9774, 14.569}})}, coordinateSystem(extent = {{-100, -100}, {100, 100}})));
+  end ThermalConductanceWireEPH;
 end libTES;

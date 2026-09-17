@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import scipy
 from scipy.io import loadmat
+import matplotlib.pyplot as plt
 
 
 
@@ -388,20 +389,23 @@ class TESModel:
         # Initialize the noise source vectors
         self.noise_source_vectors = {}
                 
-        ## 1. Thermal noise (passive + active)
+        ## 1. Johnson (Thermal) noise (passive + active)
         TES_R0 = self.simulation_results["c1.R"][-1]
         TES_T0 = self.simulation_results["c1.T"][-1]
+        TES_I = self.simulation_results["c1.i"][-1]
         TES_beta = self.simulation_results["c1.beta0"][-1]
         BIAS_RL = self.simulation_results["RL.R"][-1]
         BIAS_L = self.simulation_results["L.L"][-1]
         BIAS_T = RL_temperature if RL_temperature is not None else TES_T0
         
-        # External Johnson Noise across shunt resistor
-        self.noise_source_vectors["External Johnson noise"] = np.zeros(self.nparams)        
-        self.noise_source_vectors["External Johnson noise"][0] = np.sqrt(4.*scipy.constants.k * BIAS_T*BIAS_RL)         
-        # Internal Johnson Noise, also called TES Johnson Noise
-        self.noise_source_vectors["TES Johnson noise"] = np.zeros(self.nparams)
-        self.noise_source_vectors["TES Johnson noise"][1] = np.sqrt(4.*scipy.constants.k * TES_T0*TES_R0 * (1+2*TES_beta)) 
+        # External Johnson Noise (PJN, passive Johnson noise) across shunt resistor
+        self.noise_source_vectors["PJN"] = np.zeros(self.nparams)        
+        self.noise_source_vectors["PJN"][0] = np.sqrt(4.*scipy.constants.k * BIAS_T*BIAS_RL)         
+        # Internal Johnson Noise, also called TES Johnson Noise (TJN)
+        self.noise_source_vectors["TJN"] = np.zeros(self.nparams)
+        vn2 = 4.*scipy.constants.k * TES_T0*TES_R0 * (1+2*TES_beta)
+        self.noise_source_vectors["TJN"][1] = np.sqrt(vn2) 
+        self.noise_source_vectors["TJN"][2] = np.sqrt(vn2)*TES_I
 
         ## 2. Phonon noise
         for i in self.model_conductance_map:
@@ -430,9 +434,14 @@ class TESModel:
 
         ## Convert all noise terms into TES current
         self.noise_current = {}
-        self.noise_current["Readout noise"] = self.noise_readout
+        self.noise_current["Readout"] = self.noise_readout
         for key in self.noise_source_vectors:
-            self.noise_current[key] = self.get_solution_full(self.noise_source_vectors[key])[:, self.index_tes_i].real
+            self.noise_current[key] = np.abs(self.get_solution_full(self.noise_source_vectors[key])[:, self.index_tes_i])
+        
+        ## Get sum of all noise, and sum of TFN
+        self.noise_current_total = np.sqrt(np.sum(np.square(list(self.noise_current.values())), axis=0))
+        self.noise_current_totaltfn = np.sqrt(np.sum(np.square([self.noise_current[key] for key in self.noise_current if "TFN" in key]), axis=0))
+
 
         ## Also convert it into target energy deposition
         dIdP = self.get_dIdP(index_cinput = index_cinput)
@@ -458,9 +467,9 @@ class TESModel:
 
         return self.noise_current, self.frequencies
     
-    def get_impulse(self, index_cinput = -1, T=None):
+    def get_impulse(self, index = -1, index_cinput = -1, T=None):
         """
-        Compute the impulse response of the linearized system
+        Compute the impulse response of the linearized system with unit Energy/Voltage input.
         ---
         index_cinput: index of the external input
         
@@ -470,14 +479,21 @@ class TESModel:
         y (ndarray): Array of shape (len(t), n) containing the response of all states over time.
         """
         
-        ind = self._heat_capacity_state_index(index_cinput)
+        if index < 0:
+            ind = self._heat_capacity_state_index(index_cinput)
+        else:
+            ind = index
         self._warn_if_unstable()
-        return get_impulse_response(
+        t,y = get_impulse_response(
             A=self.model["A"],
             input_index=ind,
             T=T,
             input_scale=self.external_input_coeff[ind],
         )
+        
+        # Normalize the input to the energy of the input
+        # y = y / self.external_input_coeff[ind]
+        return t, y
         
     def get_impulse2(self, energy, index_input = -1, T=None):
         """
@@ -506,6 +522,30 @@ class TESModel:
         y = eigenvectors.dot(exp_vec).T # create a vector of the solutions
         
         return T, y
+    
+    
+    def plot_noise_current(self, range = (1e-13, 1e-10)):
+        frequencies = self.frequencies
+        plt.loglog(frequencies, self.noise_current_total, label="Total", color="k", linewidth=2)
+        plt.loglog(frequencies, self.noise_current_totaltfn, label="TFN", color="r")
+
+
+        for key in self.noise_current:
+            noise = abs(self.noise_current[key])
+            if noise[0]<range[0]:
+                continue
+            if "TFN" not in key:
+                plt.loglog(frequencies, noise, label=key)
+            else:
+                plt.loglog(frequencies, noise, label=key, linestyle="--")
+
+        plt.legend(loc=(1.01,0))
+        plt.ylim(*range)
+        plt.grid(which="both", alpha=0.2)
+        plt.xlabel("Frequency [Hz]")
+        plt.ylabel(r"Current noise [A/$\sqrt{Hz}$]")
+        
+        return plt.gcf(), plt.gca()
 
 
 
