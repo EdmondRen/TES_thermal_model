@@ -320,10 +320,10 @@ class TESModel:
             also stored as ``self.Z_TES``.
         """
         d_Vext = np.zeros(self.nparams)
-        d_Vext[0] = 1
+        d_Vext[0] = self.index_cload_v
         solution = self.get_solution_full(d_Vext, norm = True)
         dI = solution[:, self.index_tes_i]
-        dV = solution[:, self.index_cload_v] - self.iw * self.simulation_results["L.L"]
+        dV = solution[:, self.index_cload_v] - self.iw * self.simulation_results["L.L"][-1] * dI
         self.Z_TES = dV/dI
         return self.Z_TES
     
@@ -494,6 +494,27 @@ class TESModel:
         # Normalize the input to the energy of the input
         # y = y / self.external_input_coeff[ind]
         return t, y
+    
+    
+    def get_impulse_split(self, index_cinput1 = -1, index_cinput2 = 2, fraction_1 = 0.5, T=None, scale_ev = None):
+        """
+        Compute the impulse response of the linearized system with unit Energy/Voltage input on two inputs
+        ---
+        index_cinput: index of the external input
+        
+        Returns
+        ---
+        t (ndarray): 1D array of time values.
+        y (ndarray): Array of shape (len(t), n) containing the response of all states over time.
+        """    
+        
+        t, y1 = self.get_impulse(index_cinput = index_cinput1, T = T)
+        t, y2 = self.get_impulse(index_cinput = index_cinput2, T = T)
+        y = y1 * fraction_1 + y2 * (1-fraction_1)
+        if scale_ev is not None:
+            y = y*scale_ev * scipy.constants.e
+            
+        return t, y
         
     def get_impulse2(self, energy, index_input = -1, T=None):
         """
@@ -546,6 +567,57 @@ class TESModel:
         plt.ylabel(r"Current noise [A/$\sqrt{Hz}$]")
         
         return plt.gcf(), plt.gca()
+    
+        
+    def plot_impedance(self, include_L = True):
+        model = self
+        if include_L:
+            didv = model.get_dIdV()
+            dvdi = 1/didv
+        else:
+            dvdi = model.get_impedance()
+
+        fig, axs = plt.subplots(1,2, figsize=(12,4))
+
+        plt.sca(axs[0])
+        plt.plot(model.frequencies, np.abs(dvdi))
+        plt.xscale("log")
+        plt.grid(which="both", alpha=0.2)
+        plt.xlabel("Frequency [Hz]")
+        plt.ylabel(r"|$Z_{circ}$| [$\Omega$]")
+        ax0_twin = plt.gca().twinx()
+        ax0_twin.plot(model.frequencies, np.angle(dvdi)/np.pi*180, color='C1', linestyle="--")
+        ax0_twin.tick_params(axis='y', colors='C1')
+        ax0_twin.yaxis.label.set_color('C1')
+        ax0_twin.spines['right'].set_color('C1') 
+        ax0_twin.set_ylabel(r"$\angle (Z_{circ})$ [$^o$]")
+
+
+        plt.sca(axs[1])
+        plt.plot(dvdi.real, dvdi.imag)
+        plt.grid(alpha=0.2)
+        plt.axhline(0,color="grey")
+        plt.axvline(0,color="grey")
+        plt.xlabel(r"Real($Z_{circ}$) [$\Omega$]")
+        plt.ylabel(r"Imag($Z_{circ}$) [$\Omega$]")
+
+        plt.tight_layout()
+        
+        return fig, axs
+    
+    
+    
+    def check_contributions(self, k: int):
+        """ Diagnosis, checking the contribution of each source to the total response
+        k: the index of the response to check
+        """
+        w, V = np.linalg.eig(self.model["A"])
+        W = np.linalg.inv(V)
+        p = V[:, k] * W[k, :]
+
+        for name, val in sorted(zip(self.model["stateVars"], p), key=lambda x: abs(x[1]),
+        reverse=True):
+            print(name, val, abs(val))    
 
 
 
@@ -967,6 +1039,28 @@ class TESMCMCFit:
         sampler.run_mcmc(initial_state, nsteps, progress=progress)
         return sampler
 
+
+def read_config(filename):
+    result = {}
+
+    with open(filename, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+
+            key, value = line.split("=", 1)
+            result[key.strip()] = float(value.strip())
+
+    return result
+
+
+def write_config(filename, data):
+    with open(filename, "w", encoding="utf-8") as f:
+        for key, value in data.items():
+            f.write(f"{key}={value}\n")
 
 def load(filename):
     """

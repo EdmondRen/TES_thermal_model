@@ -245,7 +245,7 @@ We set all excitations to zero except for $\delta V_{bias} = 1$ and solve for $\
 
 ```math
 dIdV(\omega) = \left[ H(\omega)^{-1}\begin{pmatrix}
-0 \\ 1/L \\ 0 \\ 0 \\ \vdots \\ 0
+1/R_L C_L \\ 0 \\ 0 \\ 0 \\ \vdots \\ 0
 \end{pmatrix}
 \right]_2
 ```
