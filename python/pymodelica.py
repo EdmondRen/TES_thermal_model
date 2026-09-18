@@ -448,18 +448,6 @@ class TESModel:
         self.noise_current_total = np.sqrt(np.sum(np.square(list(self.noise_current.values())), axis=0))
         self.noise_current_totaltfn = np.sqrt(np.sum(np.square([self.noise_current[key] for key in self.noise_current if "TFN" in key]), axis=0))
 
-
-        ## Also convert it into target energy deposition
-        dIdP = self.get_dIdP(index_cinput = index_cinput)
-        self.noise_power = {key: abs(self.noise_current[key]/dIdP) for key in self.noise_current}
-        self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
-
-        
-        # Integrate the NEP
-        self.noise_power_integral = np.sum(1/self.noise_power_square_sum) * (self.frequencies[1] - self.frequencies[0])  # Approximate the integral using the trapezoidal rule
-        # Compute the resolution of our detector
-        self.resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
-        self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
         
         # print("Resolution (Sigma) in eV = ", self.resolution_sigma_ev)
         
@@ -473,36 +461,39 @@ class TESModel:
 
         return self.frequencies, self.noise_current
     
-    def get_resolution(self):
-        if hasattr(self, "resolution_sigma_ev"):
-            return self.resolution_sigma_ev
-        else:
+    def get_resolution(self, dIdP = None, index_cinput = -1):
+        if not hasattr(self, "noise_current_total"):
             raise ValueError("Run get_noise() first!")
+        
+        dIdP = self.get_dIdP(index_cinput = index_cinput) if dIdP is None else dIdP
+        self.noise_power = {key: abs(self.noise_current[key]/dIdP) for key in self.noise_current}
+        self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
+
+        # Integrate the NEP
+        integrand = 1 / self.noise_power_square_sum
+        self.noise_power_integral = np.trapz(
+            integrand,
+            self.frequencies,
+        )        
+        # Compute the resolution of our detector
+        self.resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
+        self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
+        
+        return self.resolution_sigma_ev
     
     def get_resolution_split(self, 
-                            Rsh_temperature = None, 
-                            Rp_temperature = None, 
-                            noise_electronics = 0, 
-                            noise_flicker_corner = 1e-6, 
-                            noise_flicker_gamma = 1,
-                            index_cinput1 = -1, 
+                            index_cinput1 = 2, 
                             index_cinput2 = 2, 
                             fraction_1 = 0.5):
         """
         Calcuate resolution when splitting the input energy in two heat capacities.
         """    
         
-        self.get_noise(Rsh_temperature=Rsh_temperature, Rp_temperature=Rp_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
-                       index_cinput = index_cinput1)
-        resolution_1 = self.resolution_sigma_ev
-        
-        self.get_noise(Rsh_temperature=Rsh_temperature, Rp_temperature=Rp_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
-                       index_cinput = index_cinput2)
-        resolution_2 = self.resolution_sigma_ev
-        
-        resolution_combined = np.sqrt((resolution_1*fraction_1)**2 + (resolution_2*(1-fraction_1))**2)
-    
-        return resolution_combined
+        dIdP_1 = self.get_dIdP(index_cinput = index_cinput1)
+        dIdP_2 = self.get_dIdP(index_cinput = index_cinput2)
+        self.dIdP_combined = dIdP_1*fraction_1 + dIdP_2 * (1-fraction_1)
+        self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined)
+        return self.resolution_combined_sigma_ev
     
     def get_impulse(self, index = -1, index_cinput = -1, T=None):
         """
