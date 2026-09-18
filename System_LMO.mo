@@ -42,7 +42,7 @@ model System_LMO
   Modelica.Electrical.Analog.Basic.Ground GND annotation(
     Placement(transformation(origin = {-46, 56}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Inductor L(L = Bias_L, i(start = Bias_I*0.3)) annotation(
-    Placement(transformation(origin = {2, 68}, extent = {{-6, -6}, {6, 6}})));
+    Placement(transformation(origin = {28, 68}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Electrical.Analog.Sources.ConstantCurrent TESBias(I = Bias_I) annotation(
     Placement(transformation(origin = {-32, 62}, extent = {{-6, -6}, {6, 6}}, rotation = 90)));
   libTES.ThermlConductanceN g4(K = K4, n = 2) annotation(
@@ -72,9 +72,10 @@ model System_LMO
   parameter Modelica.Units.SI.Time Edep_starttime = 10e-3 "Start time of energy deposition" annotation(Evaluate=false);
   //  - Electrical, bias
   parameter Modelica.Units.SI.Current Bias_I = 36.1e-6 "Bias current" annotation(Evaluate=false);
-  parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh+Rp)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Resistance Bias_Rp = 1.50e-2 "Load resistance (Rp)" annotation(Evaluate=false);  
   parameter Modelica.Units.SI.Inductance Bias_L = 3.00e-7 "Bias circuit indutance" annotation(Evaluate=false);
-  parameter Modelica.Units.SI.Inductance Bias_C = 20e-12 "Bias circuit capacitance" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Capacitance Bias_C = 20e-12 "Bias circuit capacitance" annotation(Evaluate=false);
   //  - Electrical, TES
   parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Temperature TES_Tc = 0.021 "TES critical temp." annotation(Evaluate=false);
@@ -166,6 +167,8 @@ model System_LMO
   //    Placement(transformation(origin = {-88, 22}, extent = {{-6, -6}, {6, 6}})));
   Modelica.Electrical.Analog.Basic.Capacitor CL(C = Bias_C)  annotation(
     Placement(transformation(origin = {-10, 62}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
+  Modelica.Electrical.Analog.Basic.Resistor Rp(R= Bias_Rp, useHeatPort = false) annotation(
+    Placement(transformation(origin = {4, 68}, extent = {{-6, -6}, {6, 6}})));
 equation
   C1 = c1.C;
   C2 = c2.C;
@@ -223,12 +226,10 @@ equation
     Line(points = {{-40, 56}, {-32, 56}}, color = {0, 0, 255}));
   connect(TESBias.p, RL.n) annotation(
     Line(points = {{-32, 56}, {-20, 56}}, color = {0, 0, 255}));
-  connect(L.p, RL.p) annotation(
-    Line(points = {{-4, 68}, {-20, 68}}, color = {0, 0, 255}));
   connect(RL.p, TESBias.n) annotation(
     Line(points = {{-20, 68}, {-32, 68}}, color = {0, 0, 255}));
   connect(L.n, c1.p) annotation(
-    Line(points = {{8, 68}, {52, 68}, {52, 54}}, color = {0, 0, 255}));
+    Line(points = {{34, 68}, {52, 68}, {52, 54}}, color = {0, 0, 255}));
   connect(g2.port_a, c2.port) annotation(
     Line(points = {{-28, 22}, {-32, 22}, {-32, 26}}, color = {191, 0, 0}));
   connect(g4.port_a, g3.port_b) annotation(
@@ -281,6 +282,10 @@ equation
     Line(points = {{-10, 68}, {-20, 68}}, color = {0, 0, 255}));
   connect(CL.n, RL.n) annotation(
     Line(points = {{-10, 56}, {-20, 56}}, color = {0, 0, 255}));
+  connect(Rp.n, L.p) annotation(
+    Line(points = {{10, 68}, {22, 68}}, color = {0, 0, 255}));
+  connect(Rp.p, CL.p) annotation(
+    Line(points = {{-2, 68}, {-10, 68}}, color = {0, 0, 255}));
   annotation(
     uses(Modelica(version = "4.1.0")),
     Diagram(graphics = {Text(origin = {-59, -54}, extent = {{-5, 4}, {5, -4}}, textString = "0", textStyle = {TextStyle.Bold}), Line(origin = {71, 22}, points = {{-100, 0}, {37, 0}, {37, -75}}, color = {255, 170, 0}, thickness = 2), Rectangle(origin = {58, 24}, fillColor = {232, 232, 232}, pattern = LinePattern.DashDot, lineThickness = 0.5, extent = {{-44, 30}, {44, -30}}), Text(origin = {-30, 46}, extent = {{-10, 4}, {10, -4}}, textString = "GoldPad(Target)"), Text(origin = {-6, 46}, extent = {{-8, 2}, {8, -2}}, textString = "WireBond1"), Text(origin = {25, 47}, extent = {{-9, 3}, {9, -3}}, textString = "GoldPad(TES1)

@@ -354,7 +354,8 @@ class TESModel:
     
     
     def get_noise(self, 
-                    RL_temperature = None, 
+                    Rsh_temperature = None, 
+                    Rp_temperature = None, 
                     noise_electronics = 0, 
                     noise_flicker_corner = 1e-6, 
                     noise_flicker_gamma = 1,
@@ -390,17 +391,22 @@ class TESModel:
         self.noise_source_vectors = {}
                 
         ## 1. Johnson (Thermal) noise (passive + active)
+        T_bath = self.simulation_results["fixedTemperature.T"][-1]
         TES_R0 = self.simulation_results["c1.R"][-1]
         TES_T0 = self.simulation_results["c1.T"][-1]
         TES_I = self.simulation_results["c1.i"][-1]
         TES_beta = self.simulation_results["c1.beta0"][-1]
         BIAS_RL = self.simulation_results["RL.R"][-1]
+        BIAS_Rp = self.simulation_results["Rp.R"][-1]
         BIAS_L = self.simulation_results["L.L"][-1]
-        BIAS_T = RL_temperature if RL_temperature is not None else TES_T0
+        BIAS_Rsh_T = Rsh_temperature if Rsh_temperature is not None else T_bath
+        BIAS_Rp_T = Rp_temperature if Rp_temperature is not None else T_bath
         
         # External Johnson Noise (PJN, passive Johnson noise) across shunt resistor
         self.noise_source_vectors["PJN"] = np.zeros(self.nparams)        
-        self.noise_source_vectors["PJN"][0] = np.sqrt(4.*scipy.constants.k * BIAS_T*BIAS_RL)         
+        self.noise_source_vectors["PJN"][0] = np.sqrt(4.*scipy.constants.k * (BIAS_Rsh_T*BIAS_RL))
+        self.noise_source_vectors["PJN"][1] = np.sqrt(4.*scipy.constants.k * (BIAS_Rp_T*BIAS_Rp))
+        
         # Internal Johnson Noise, also called TES Johnson Noise (TJN)
         self.noise_source_vectors["TJN"] = np.zeros(self.nparams)
         vn2 = 4.*scipy.constants.k * TES_T0*TES_R0 * (1+2*TES_beta)
@@ -474,7 +480,8 @@ class TESModel:
             raise ValueError("Run get_noise() first!")
     
     def get_resolution_split(self, 
-                            RL_temperature = None, 
+                            Rsh_temperature = None, 
+                            Rp_temperature = None, 
                             noise_electronics = 0, 
                             noise_flicker_corner = 1e-6, 
                             noise_flicker_gamma = 1,
@@ -485,11 +492,11 @@ class TESModel:
         Calcuate resolution when splitting the input energy in two heat capacities.
         """    
         
-        self.get_noise(RL_temperature=RL_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
+        self.get_noise(Rsh_temperature=Rsh_temperature, Rp_temperature=Rp_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
                        index_cinput = index_cinput1)
         resolution_1 = self.resolution_sigma_ev
         
-        self.get_noise(RL_temperature=RL_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
+        self.get_noise(Rsh_temperature=Rsh_temperature, Rp_temperature=Rp_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
                        index_cinput = index_cinput2)
         resolution_2 = self.resolution_sigma_ev
         
