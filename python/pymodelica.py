@@ -575,7 +575,7 @@ class TESModel:
     
     def plot_noise_current(self, range = (1e-13, 1e-10)):
         frequencies = self.frequencies
-        plt.loglog(frequencies, self.noise_current_total, label="Total", color="k", linewidth=2)
+        plt.loglog(frequencies, self.noise_current_total, label="Total", color="k", linewidth=3)
         plt.loglog(frequencies, self.noise_current_totaltfn, label="TFN", color="r")
 
 
@@ -586,7 +586,7 @@ class TESModel:
             if "TFN" not in key:
                 plt.loglog(frequencies, noise, label=key)
             else:
-                plt.loglog(frequencies, noise, label=key, linestyle="--")
+                plt.loglog(frequencies, noise, label=key, linestyle="-.")
 
         plt.legend(loc=(1.01,0))
         plt.ylim(*range)
@@ -614,7 +614,7 @@ class TESModel:
         plt.xlabel("Frequency [Hz]")
         plt.ylabel(r"|$Z_{circ}$| [$\Omega$]")
         ax0_twin = plt.gca().twinx()
-        ax0_twin.plot(model.frequencies, np.angle(dvdi)/np.pi*180, color='C1', linestyle="--")
+        ax0_twin.plot(model.frequencies, np.angle(dvdi)/np.pi*180, color='C1', linestyle="-.")
         ax0_twin.tick_params(axis='y', colors='C1')
         ax0_twin.yaxis.label.set_color('C1')
         ax0_twin.spines['right'].set_color('C1') 
