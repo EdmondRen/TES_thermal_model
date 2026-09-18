@@ -128,7 +128,7 @@ The Python helpers rely on the naming conventions in Section 4.2. In particular,
 `libTES.mo` defines the reusable models used by the system examples:
 
 - `libTES.TES` - TES component with electrical pins, one thermal port, tanh transition resistance, Joule heating, and constant heat capacity.
-    - $R = \frac{R_n}{2} (1+ \tanh(\frac{T - T_c}{T_c} \alpha - \frac{I - I_0}{I_0} \beta))$
+    - $R = \frac{R_n}{2} (1+ \tanh(\frac{T - T_c}{T_c} \alpha + \frac{I - I_0}{I_0} \beta))$
     - $C \dot{T} = P_{Joule} + Q_{flow}$
 - `libTES.TES2` - Almost the same as `TES` but with temperature dependent heat capacity.
     - $c_p = a_1 T + a_3 T^3$
@@ -144,6 +144,8 @@ The Python helpers rely on the naming conventions in Section 4.2. In particular,
 **The conventions must be followed for the analysis code to work**
 1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always name TES c1.** It is optional to give the target the largest index.
 2. For TES bias circuit, always use a current bias with a shunt resistor named `RL`, a loop capacitance named `CL`, and a loop inductance named `L`. 
+
+
 
 ## 5. Analyzing Linearized Model
 
@@ -345,9 +347,125 @@ Since our model is mostly a black-box (not differentiable), the best choice for 
 
 ## Modeled Systems
 
+You can generate a svg figure of the model in OMEdit GUI by selecting File->Export->Image.
+
 ### LMO
 
 <img src="System_LMO.svg" width="700" alt="LMO system thermal model" style="background-color: #ffffff; padding: 16px; border-radius: 8px;">
+
+
+### Notes on TES resistance
+
+One drawback of the simple TES resistance model is that it is only valid near Tc. A global expression would be
+
+
+```math
+\boxed{
+R(T,I)=
+\frac{R_n}{2}
+\left[
+1+
+\tanh
+\left(
+\frac{
+T-T_{c0}\left[
+1-
+\left(\dfrac{|I|}{I_{c0}}\right)^p
+\right]
+}
+{\Delta T}
+\right)
+\right]
+}
+```
+
+We can parameterize the full global tanh model so that it reproduces specified $\alpha_0\$ and $\beta_0$ at an arbitrary operating point $(T_0,I_0,R_0)$, while retaining the original nonlinear form. The entire global model can be written in terms of the experimentally meaningful parameters
+
+```math
+\boxed{
+R_n,\quad
+T_0,\quad
+I_0,\quad
+r_0=\frac{R_0}{R_n},\quad
+\alpha_0,\quad
+\beta_0,\quad
+p.
+}
+```
+
+
+with
+
+```math
+\left\{
+\begin{aligned}
+\Delta T&=
+\frac{2T_0(1-r_0)}{\alpha_0}\\
+
+T_{c0}
+&=
+T_0
+\left[
+1+
+\frac{\beta_0}{p\alpha_0}
+-
+\frac{2(1-r_0)}{\alpha_0}
+\operatorname{atanh}(2r_0-1)
+\right]\\
+
+I_{c0}
+&=
+|I_0|
+\left(
+\frac{p\alpha_0T_{c0}}
+{\beta_0T_0}
+\right)^{1/p}.
+\end{aligned}
+\right.
+```
+
+This is not a local approximation: the resulting $R(T,I)$ remains the **full nonlinear tanh surface**. The role of $\alpha_0$ and $\beta_0$ is to calibrate that global surface so that its logarithmic slopes at your selected operating point are exactly the desired values.
+
+For example, if you choose the operating point at the middle of the transition, $r_0=\frac12$,
+then the expressions become especially simple:
+
+```math
+\left\{
+\begin{aligned}
+\Delta T &= \frac{T_0}{\alpha_0},\\[6pt]
+T_{c0} &= T_0\left(1+\frac{\beta_0}{p\alpha_0}\right),\\[6pt]
+I_{c0} &= |I_0|
+\left(
+\frac{p\alpha_0+\beta_0}{\beta_0}
+\right)^{1/p}.
+\end{aligned}
+\right.
+```
+
+
+For TES simulation, this last parameterization is particularly convenient: you can specify something like $R_0/R_n=0.3$, $T_0$, $I_0$, measured $\alpha_0$, measured $\beta_0$, and an assumed $p$, and the model automatically generates a global $R(T,I)$ surface consistent with that operating point.
+
+```math
+\boxed{
+R(T,I)=
+\frac{R_n}{2}
+\left[
+1+
+\tanh
+\left(
+\alpha
+\frac{
+T-T_0(1+\frac{\beta_0}{p\alpha_0})\left[
+1-
+\left(\dfrac{|I|}{I_{0}}\right)^p \frac{\beta_0}{p\alpha_0 + \beta_0}
+\right]
+}
+{T_0}
+\right)
+\right]
+}
+```
+
 
 ## Contributing
 

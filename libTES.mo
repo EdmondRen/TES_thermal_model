@@ -63,6 +63,7 @@ package libTES
     parameter Modelica.Units.SI.Current I0 "Current where beta0 is evaluated";
     parameter Real alpha0;
     parameter Real beta0 = 1;
+    parameter Real p0 = 2;
     // Heat capacity
     parameter Modelica.Units.SI.Mass m(displayUnit = "ug") = 1;
     parameter Real a1 = 0;
@@ -81,7 +82,8 @@ package libTES
     p.i = i;
     n.i = -i;
 // TES Resistance. Joule heating generated internally
-    R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc) + (i - I0)*beta0/I0);
+    // R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc) + (i - I0)*beta0/I0);
+    R = Rn/2*(1. + tanh(alpha0/Tc * (T - Tc * (1+beta0/alpha0/p0) * (1 - (abs(i)/I0)^p0 * beta0 / (p0+alpha0 + beta0)) ) ));
     v = R*i;
     P_Joule = v*i;
 // Heat capacity (temperature dependent)
@@ -113,7 +115,7 @@ package libTES
     Real G;
   equation
     Q_flow = K*(port_a.T^n - port_b.T^n);
-    G = n*K*port_a.T^(n - 1);
+    G = n*K*max(port_a.T, port_b.T)^(n - 1);
     port_a.Q_flow = Q_flow;
     port_b.Q_flow = -Q_flow;
     annotation(

@@ -452,10 +452,10 @@ class TESModel:
         # Integrate the NEP
         self.noise_power_integral = np.sum(1/self.noise_power_square_sum) * (self.frequencies[1] - self.frequencies[0])  # Approximate the integral using the trapezoidal rule
         # Compute the resolution of our detector
-        resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
-        resolution_sigma_ev = resolution_sigma/scipy.constants.e
+        self.resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
+        self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
         
-        print("Resolution (Sigma) in eV = ",resolution_sigma_ev)
+        # print("Resolution (Sigma) in eV = ", self.resolution_sigma_ev)
         
         # Compute an ideal TES resolution
         # ctot = cg + ca + cau1 + cwb1 + cau2 + csi + cte + cm + cwb2
@@ -465,7 +465,37 @@ class TESModel:
         # ideal_resolution = rough_resolution_ev
         # print("Ideal Resolution in eV = ",rough_resolution_ev)
 
-        return self.noise_current, self.frequencies
+        return self.frequencies, self.noise_current
+    
+    def get_resolution(self):
+        if hasattr(self, "resolution_sigma_ev"):
+            return self.resolution_sigma_ev
+        else:
+            raise ValueError("Run get_noise() first!")
+    
+    def get_resolution_split(self, 
+                            RL_temperature = None, 
+                            noise_electronics = 0, 
+                            noise_flicker_corner = 1e-6, 
+                            noise_flicker_gamma = 1,
+                            index_cinput1 = -1, 
+                            index_cinput2 = 2, 
+                            fraction_1 = 0.5):
+        """
+        Calcuate resolution when splitting the input energy in two heat capacities.
+        """    
+        
+        self.get_noise(RL_temperature=RL_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
+                       index_cinput = index_cinput1)
+        resolution_1 = self.resolution_sigma_ev
+        
+        self.get_noise(RL_temperature=RL_temperature, noise_electronics = noise_electronics, noise_flicker_corner=noise_flicker_corner,noise_flicker_gamma=noise_flicker_gamma,
+                       index_cinput = index_cinput2)
+        resolution_2 = self.resolution_sigma_ev
+        
+        resolution_combined = np.sqrt((resolution_1*fraction_1)**2 + (resolution_2*(1-fraction_1))**2)
+    
+        return resolution_combined
     
     def get_impulse(self, index = -1, index_cinput = -1, T=None):
         """
@@ -1777,16 +1807,15 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
         
                 
         for i in ind_gs:
-            search_text = f"K=K{i}"
-            replace_text = f"G={data[f'g{i}.G'][-1]:.3g}"
+            search_text = f"K=K{i} <"
+            replace_text = f"G={data[f'g{i}.G'][-1]:.3g} <"
             content = content.replace(search_text, replace_text)
         
         for i in ind_cs:
-            if i!=1:
-                search_text = f"m=m{i}"
-                replace_text = f"C={data[f'c{i}.C'][-1]:.3g}"
-                content = content.replace(search_text, replace_text)
-                # print(search_text,data[f'c{i}.C'][-1])
+            search_text = f"m=m{i} <"
+            replace_text = f"C={data[f'c{i}.C'][-1]:.3g} <"
+            content = content.replace(search_text, replace_text)
+            # print(search_text,data[f'c{i}.C'][-1])
             
             # Add temperature
             search_text = f">c{i}<"
