@@ -471,10 +471,16 @@ class TESModel:
 
         # Integrate the NEP
         integrand = 1 / self.noise_power_square_sum
-        self.noise_power_integral = np.trapz(
-            integrand,
-            self.frequencies,
-        )        
+        if np.__version__ < "2.4":
+            self.noise_power_integral = np.trapz(
+                integrand,
+                self.frequencies,
+            )
+        else:
+            self.noise_power_integral = np.trapezoid(
+                integrand,
+                self.frequencies,
+            )        
         # Compute the resolution of our detector
         self.resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
         self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
@@ -646,8 +652,7 @@ class TESModel:
         for name, val in sorted(zip(self.model["stateVars"], p), key=lambda x: abs(x[1]),
         reverse=True):
             print(name, val, abs(val))    
-
-
+        
 
 class TESMCMCFit:
     """
@@ -1794,31 +1799,44 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
             ind_gs.append(int(m_g.group(1)))
     
     ## Define for each system name the corresponding replacement rules
-    if system_name == "System_LMO":
-        search_text = f"m=TES_m"
-        replace_text = f"C={data[f'c1.C'][-1]:.3g}"
+    # if system_name == "System_LMO":
+    search_text = f"m=TES_m"
+    replace_text = f"C={data[f'c1.C'][-1]:.3g}"
+    content = content.replace(search_text, replace_text)
+    
+    search_text = f"=TES_Tc"
+    replace_text = f"={data[f'c1.T'][-1]:.3g}"
+    content = content.replace(search_text, replace_text)
+
+    search_text = f"=Tb"
+    replace_text = f"={data[f'fixedTemperature.T'][-1]*1e3:.3g} mK"
+    content = content.replace(search_text, replace_text)
+
+    
+    search_text = f"=Bias_R<"
+    replace_text = f"={data[f'Bias_R'][-1]*1e3:.3g} mOhm<"
+    content = content.replace(search_text, replace_text)
+
+
+    search_text = f"=Bias_Rp"
+    replace_text = f"={data[f'Bias_Rp'][-1]*1e3:.3g} mOhm"
+    content = content.replace(search_text, replace_text)
+        
+    for i in ind_gs:
+        search_text = f"K=K{i} <"
+        replace_text = f"G={data[f'g{i}.G'][-1]:.3g} <"
         content = content.replace(search_text, replace_text)
-        
-        search_text = f"=TES_Tc"
-        replace_text = f"={data[f'c1.T'][-1]:.3g}"
+    
+    for i in ind_cs:
+        search_text = f"m=m{i} <"
+        replace_text = f"C={data[f'c{i}.C'][-1]:.3g} <"
         content = content.replace(search_text, replace_text)
+        # print(search_text,data[f'c{i}.C'][-1])
         
-                
-        for i in ind_gs:
-            search_text = f"K=K{i} <"
-            replace_text = f"G={data[f'g{i}.G'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
-        
-        for i in ind_cs:
-            search_text = f"m=m{i} <"
-            replace_text = f"C={data[f'c{i}.C'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
-            # print(search_text,data[f'c{i}.C'][-1])
-            
-            # Add temperature
-            search_text = f">c{i}<"
-            replace_text = f">c{i} {data[f'c{i}.T'][-1]*1000:.3g}mK<"
-            content = content.replace(search_text, replace_text)            
+        # Add temperature
+        search_text = f">c{i}<"
+        replace_text = f">c{i} {data[f'c{i}.T'][-1]*1000:.3g}mK<"
+        content = content.replace(search_text, replace_text)            
 
         
         
