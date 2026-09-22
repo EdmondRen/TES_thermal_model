@@ -11,8 +11,48 @@ import scipy
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
+if np.lib.NumpyVersion(np.__version__) < "2.4.0":
+    trapz = np.trapz
+else:
+    trapz = np.trapezoid
 
 
+def get_collection_efficiency(time, data, energy, index_input):
+    """
+    Calcualte the collection efficiency (1 - 2*(Rsh+Rp)/(Rsh + Rp+Rn*bias_point))*Ib*Rsh * integral + (Rp+Rsh)*integral2 
+    for a given input
+    
+    Parameters:
+    --- 
+    time (numpy.ndarray): Time array
+    data (dict[str, numpy.ndarray]): a dictionary mapping Modelica variable names to values.
+    energy (double): True energy deposited in the target
+    index_input : int
+                Zero-based state-space coordinate to excite. The excitation uses
+                the corresponding ``external_input_coeff`` value.
+
+    Returns:
+    ---
+    double: collection efficiency in eV (measured/true)
+    """
+
+    if index_input == 0:
+                raise ValueError(
+                    "index_cinput is 1-based for heat capacities; use 1 for c1 "
+                    "or a negative value to count from the end"
+                )
+    else:
+        Rsh = data["RL.R"][-1]
+        Rp = data["Rp.R"][-1]
+        R0 = data["R0"][-1]
+        Ib = data["TESBias.I"][-1]
+        integral = trapz(-(data[f"c{index_input}.i"] - np.mean(data[f'c{index_input}.i'][:10])), time)
+        integral2 = trapz((data[f"c{index_input}.i"] - np.mean(data[f'c{index_input}.i'][:10]))**2, time)
+        Jpower = (1 - 2*(Rsh+Rp)/(Rsh + Rp+R0))*Ib*Rsh * integral + (Rp+Rsh)*integral2 
+        E_meas = Jpower/ scipy.constants.e
+        epsilon = E_meas/energy *100
+        print(f"Collection Efficiency is  {epsilon:.3f}%")
+        return epsilon
     
     
 def get_impulse_response(A, input_index, T=None, input_scale=1.0):
@@ -471,16 +511,11 @@ class TESModel:
 
         # Integrate the NEP
         integrand = 1 / self.noise_power_square_sum
-        if np.__version__ < "2.4":
-            self.noise_power_integral = np.trapz(
-                integrand,
-                self.frequencies,
-            )
-        else:
-            self.noise_power_integral = np.trapezoid(
-                integrand,
-                self.frequencies,
-            )        
+        self.noise_power_integral = trapz(
+            integrand,
+            self.frequencies,
+        )
+
         # Compute the resolution of our detector
         self.resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
         self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
@@ -1200,6 +1235,10 @@ def load(filename):
 
         return names
 
+    def Calc_R0(Rn, alpha0, Tc, T, beta0, I0, i, p0=2):
+        return Rn/2*(1. + np.tanh(alpha0/Tc * (T - Tc * (1+beta0/alpha0/p0) * (1 - (abs(i)/I0)**p0 * beta0 / (p0+alpha0 + beta0)) ) ))
+    
+
     n_variables = data_info.shape[1]
     names = decode_strings(name_matrix, n_variables)
 
@@ -1231,6 +1270,16 @@ def load(filename):
         variables[name] = np.asarray(values).squeeze()
 
     time = np.asarray(data_2[0, :]).squeeze()
+
+    Rn = variables["TES_Rn"][-1]
+    alpha = variables["TES_alpha"][-1]
+    beta = variables["TES_beta"][-1]
+    Tc = variables["TES_Tc"][-1]
+    I0 = variables["TES_I0"][-1]
+    i = variables["c1.i"]
+    T = variables["c1.T"]
+
+    variables["R0"] = Calc_R0(Rn, alpha, Tc, T, beta, I0, i)
 
     return time, variables
 
