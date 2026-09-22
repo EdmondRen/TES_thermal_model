@@ -501,10 +501,18 @@ class TESModel:
 
         return self.frequencies, self.noise_current
     
-    def get_resolution(self, dIdP = None, index_cinput = -1):
+    def get_resolution(self, dIdP = None, fmin = None, fmax = None, index_cinput = -1):
         if not hasattr(self, "noise_current_total"):
             raise ValueError("Run get_noise() first!")
-        
+
+        mask = np.ones(self.frequencies.shape, dtype=bool)
+
+        if fmin is not None:
+                mask &= self.frequencies >= fmin
+
+        if fmax is not None:
+            mask &= self.frequencies <= fmax
+
         dIdP = self.get_dIdP(index_cinput = index_cinput) if dIdP is None else dIdP
         self.noise_power = {key: abs(self.noise_current[key]/dIdP) for key in self.noise_current}
         self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
@@ -512,8 +520,8 @@ class TESModel:
         # Integrate the NEP
         integrand = 1 / self.noise_power_square_sum
         self.noise_power_integral = trapz(
-            integrand,
-            self.frequencies,
+            integrand[mask],
+            self.frequencies[mask],
         )
 
         # Compute the resolution of our detector
@@ -525,7 +533,9 @@ class TESModel:
     def get_resolution_split(self, 
                             index_cinput1 = 2, 
                             index_cinput2 = 2, 
-                            fraction_1 = 0.5):
+                            fraction_1 = 0.5, 
+                            fmin = None, 
+                            fmax = None):
         """
         Calcuate resolution when splitting the input energy in two heat capacities.
         """    
@@ -533,7 +543,9 @@ class TESModel:
         dIdP_1 = self.get_dIdP(index_cinput = index_cinput1)
         dIdP_2 = self.get_dIdP(index_cinput = index_cinput2)
         self.dIdP_combined = dIdP_1*fraction_1 + dIdP_2 * (1-fraction_1)
-        self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined)
+        self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined, 
+                                                                fmin = fmin, 
+                                                                fmax = fmax)
         return self.resolution_combined_sigma_ev
     
     def get_impulse(self, index = -1, index_cinput = -1, T=None):
