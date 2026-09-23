@@ -246,9 +246,9 @@ We can solve these equations in Fourier space easily. After Fourier transform, d
 We set all excitations to zero except for $\delta V_{bias} = 1$ and solve for $\Delta I_{TES}$. The solution can be obtained by directly inverting the H matrix, multiply by the excitation vector and take the second component. Since the excitation is model-independent, the same code can be used to calculate complex impedance when model changes. 
 
 ```math
-dIdV(\omega) = \left[ H(\omega)^{-1}\begin{pmatrix}
-1/R_L C_L \\ 0 \\ 0 \\ 0 \\ \vdots \\ 0
-\end{pmatrix}
+dIdV(\omega) = \left[ H(\omega)^{-1} \left(
+1/R_L C_L,\ 0,\ 0,\ 0,\  \cdots ,\ 0
+\right)^T
 \right]_2
 ```
 
@@ -260,12 +260,35 @@ The same concept applies to noise, you just need to set the appropriate excitati
 #### 5.2.1 Johnson noise
 
 There load resistor and TES resistance both produces Johnson noise with a **one-sided** power spectral density of $\overline{V_n^2} = 4k_B T R \Delta f$. But they correspond to 
-different external input. Load resistor noise is $\delta V_{ext}$, while TES noise is $\delta V_{int}$.
+different external input. Load resistor noise is $\delta V_{ext}$, while TES noise is $\delta V_{int}$. The TES-current-referred noise are:
 
+
+```math
+I_{n,PJN}(\omega) = \left[ H(\omega)^{-1} \left(
+\sqrt{\overline{V_{n,ext}^2}}/R_L C_L,\ 0,\ 0,\ 0,\  \cdots ,\ 0
+\right)^T
+\right]_2
+```
+
+```math
+I_{n,TJN}(\omega) = \left[ H(\omega)^{-1} \left(
+0,\ \sqrt{\overline{V_{n,int}^2}}/L,\ -I_{TES}\sqrt{\overline{V_{n,int}^2}}/C_1,\ 0,\  \cdots ,\ 0
+\right)^T
+\right]_2
+```
 
 #### 5.2.2 Thermal fluctuation noise (TFN)
 
 For all cases where the temperature difference between two adjoining heat capacity blocks is a step function (ballistic phonons, e-p interaction, Kapitza resistance), the **one-sided** TFN power spectral density is well approximated $\overline{P_n^2} = 2 k_B (G_1 T_1^2 + G_2 T_2^2) \Delta f$. (BOYLE, WS, and KF RODGERS. "Performance characteristics of a new low-temperature bolometer." SPIE milestone series 179 (2004): 290-291.). It reduces to $4 k_B G T^2$ for a single body in thermal equilibrium, and can be derived from $\langle\Delta E^2\rangle=k_BT^2C$.
+
+ The TES-current-referred noise is:
+
+```math
+I_{n,TFN}(\omega) = \left[ H(\omega)^{-1} \left(
+0,\ 0,\ \cdots, \sqrt{\overline{P_{i,n}^2}}/C_{j1},\ \cdots , -\sqrt{\overline{P_{i,n}^2}}/C_{j2},\ \cdots,\ 0
+\right)^T
+\right]_2
+```
 
 Away from equilibrium, the simple formula is only approximate. https://pubmed.ncbi.nlm.nih.gov/20389816/
 
@@ -278,8 +301,33 @@ Readout noise directly adds on top of the current noise. Thus, it does not invol
 #### 5.2.4 Noise Equivalent Power (NEP)
 
 
+### 5.3 Collection efficiency.
 
-### 5.3 MCMC fit
+Define collection efficiency as:
+
+    efficiency = integrated Joule-energy perturbation / deposited energy
+
+  - For the linear model, calculate first-order Joule perturbation using
+    the normalized state-space matrices and operating-point TES voltage/
+    current:
+
+    δP_Joule = V0 * δI + I0 * δV
+
+    Use the state-transition integral analytically from A and the
+    impulse input vector, with an optional finite integration endpoint
+    and a stable-system validation.
+
+  - For nonlinear results, accept the complete time series/result
+    dictionary, use c1.v and c1.i by default, subtract the baseline
+    Joule power, and numerically integrate:
+
+    $P_{Joule}(t) = v(t)i(t) - V_0I_0$
+
+    Support explicit voltage/current keys and explicit baseline values
+    so alternate TES component names remain usable.
+
+
+### 5.4 MCMC fit
 
 The system could be complicated, and there are many parameters that may not be well constrained by the data. In this case, we can use the MCMC method to fit the parameters with three measurements:
 
@@ -356,12 +404,26 @@ You can generate a svg figure of the model in OMEdit GUI by selecting File->Expo
 
 ### Notes on TES resistance
 
-One drawback of the simple TES resistance model is that it is only valid near Tc. A global expression would be
+One drawback of the simple TES resistance model is that it is only valid near Tc. For a time-domain simulation over a larger part of the transition, however, you need an actual nonlinear \(R(T,I)\). A convenient phenomenological model is
 
 
 ```math
 \boxed{
 R(T,I)=
+
+\frac{R_n}{2}
+\left[
+1+
+\tanh
+\left(
+\frac{
+T-T_{c}(I)
+}
+{\Delta T}
+\right)
+\right]
+
+\sim
 \frac{R_n}{2}
 \left[
 1+
@@ -379,7 +441,9 @@ T-T_{c0}\left[
 }
 ```
 
-We can parameterize the full global tanh model so that it reproduces specified $\alpha_0\$ and $\beta_0$ at an arbitrary operating point $(T_0,I_0,R_0)$, while retaining the original nonlinear form. The entire global model can be written in terms of the experimentally meaningful parameters
+The current dependency of $T_c$ using Ginzburg-Landau theory has p=3/2. However, it is not generally the experimentally observed TES critical current dependency.
+
+We can parameterize the full global tanh model so that it reproduces specified $\alpha_0$ and $\beta_0$ at an arbitrary operating point $(T_0,I_0,R_0)$, while retaining the original nonlinear form. The entire global model can be written in terms of the experimentally meaningful parameters
 
 ```math
 \boxed{
@@ -410,7 +474,7 @@ T_0
 \frac{\beta_0}{p\alpha_0}
 -
 \frac{2(1-r_0)}{\alpha_0}
-\operatorname{atanh}(2r_0-1)
+\mathrm{atanh}(2r_0-1)
 \right]\\
 
 I_{c0}
@@ -441,9 +505,6 @@ I_{c0} &= |I_0|
 \end{aligned}
 \right.
 ```
-
-
-For TES simulation, this last parameterization is particularly convenient: you can specify something like $R_0/R_n=0.3$, $T_0$, $I_0$, measured $\alpha_0$, measured $\beta_0$, and an assumed $p$, and the model automatically generates a global $R(T,I)$ surface consistent with that operating point.
 
 ```math
 \boxed{

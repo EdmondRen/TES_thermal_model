@@ -522,6 +522,180 @@ class TESModel:
         # Normalize the input to the energy of the input
         # y = y / self.external_input_coeff[ind]
         return t, y
+
+    def get_linear_phonon_energy_collection_efficiency(
+        self,
+        index_cinput=-1,
+        deposited_energy=1.0,
+        t_end=None,
+        voltage_key="c1.v",
+        current_key="c1.i",
+    ):
+        """Calculate Joule-energy collection for the linearized model.
+
+        The linearized TES Joule-power perturbation is evaluated to first
+        order as ``V0 * delta_I + I0 * delta_V``. The state-transition
+        integral is calculated directly from the model matrix, avoiding a
+        time-grid approximation.
+
+        Args:
+            index_cinput: One-based heat-capacity index, or a negative index
+                counted from the final heat-capacity state.
+            deposited_energy: Energy represented by the impulse, in joules.
+            t_end: Optional finite integration endpoint in seconds. If it is
+                omitted, the response is integrated to infinity and the
+                linearized system must be stable.
+            voltage_key: Simulation-result key containing the operating-point
+                TES voltage.
+            current_key: Simulation-result key containing the operating-point
+                TES current.
+
+        Returns:
+            A dictionary containing ``deposited_energy``, ``joule_energy``,
+            ``collected_energy``, ``efficiency``, and ``integration_time``.
+
+        Raises:
+            ValueError: If the energy, integration endpoint, or operating
+                point is invalid, or if an infinite integral is requested
+                for an unstable model.
+            numpy.linalg.LinAlgError: If the state matrix cannot be solved.
+        """
+        if deposited_energy <= 0:
+            raise ValueError("deposited_energy must be positive")
+        if t_end is not None and t_end <= 0:
+            raise ValueError("t_end must be positive when provided")
+        if voltage_key not in self.simulation_results:
+            raise KeyError(f"Missing operating-point voltage result: {voltage_key}")
+        if current_key not in self.simulation_results:
+            raise KeyError(f"Missing operating-point current result: {current_key}")
+
+        voltage_0 = float(self.simulation_results[voltage_key][-1])
+        current_0 = float(self.simulation_results[current_key][-1])
+        if not np.isfinite([voltage_0, current_0]).all():
+            raise ValueError("Operating-point voltage and current must be finite")
+        state_index = self._heat_capacity_state_index(index_cinput)
+        input_vector = np.zeros(self.nparams)
+        input_vector[state_index] = (
+            self.external_input_coeff[state_index] * deposited_energy
+        )
+
+        state_matrix = np.asarray(self.model["A"], dtype=float)
+        if t_end is None:
+            max_real_pole = np.max(np.linalg.eigvals(state_matrix).real)
+            if max_real_pole >= 0:
+                raise ValueError(
+                    "An infinite impulse-response integral requires a stable "
+                    f"linearized model; maximum pole real part is {max_real_pole:g}"
+                )
+            state_integral = -np.linalg.solve(state_matrix, input_vector)
+            integration_time = np.inf
+        else:
+            state_transition = scipy.linalg.expm(state_matrix * t_end)
+            state_integral = np.linalg.solve(
+                state_matrix,
+                (state_transition - np.eye(self.nparams)).dot(input_vector),
+            )
+            integration_time = float(t_end)
+
+        joule_energy = float(
+            voltage_0 * state_integral[self.index_tes_i]
+            + current_0 * state_integral[self.index_cload_v]
+        )
+        collected_energy = float(-joule_energy)
+        return {
+            "deposited_energy": float(deposited_energy),
+            "joule_energy": joule_energy,
+            "collected_energy": collected_energy,
+            "efficiency": collected_energy / deposited_energy,
+            "integration_time": integration_time,
+        }
+
+    def get_nonlinear_phonon_energy_collection_efficiency(
+        self,
+        time,
+        simulation_result=None,
+        deposited_energy=None,
+        voltage=None,
+        current=None,
+        voltage_key="c1.v",
+        current_key="c1.i",
+        baseline_voltage=None,
+        baseline_current=None,
+    ):
+        """Calculate Joule-energy collection from a nonlinear waveform.
+
+        The full nonlinear TES voltage and current waveforms are required so
+        that the exact Joule power ``v * i`` can be integrated after removal
+        of the operating-point Joule power.
+
+        Args:
+            time: Monotonic simulation time samples in seconds.
+            simulation_result: Optional result dictionary, such as the data
+                returned by ``load``. Use this or provide ``voltage`` and
+                ``current`` arrays directly.
+            deposited_energy: Input energy in joules.
+            voltage: Optional TES voltage waveform. Defaults to
+                ``simulation_result[voltage_key]``.
+            current: Optional TES current waveform. Defaults to
+                ``simulation_result[current_key]``.
+            voltage_key: Result key for the TES voltage waveform.
+            current_key: Result key for the TES current waveform.
+            baseline_voltage: Operating-point voltage. Defaults to the first
+                voltage sample.
+            baseline_current: Operating-point current. Defaults to the first
+                current sample.
+
+        Returns:
+            A dictionary containing ``deposited_energy``, ``joule_energy``,
+            ``collected_energy``, ``efficiency``, and ``integration_time``.
+
+        Raises:
+            ValueError: If required data is missing, arrays have inconsistent
+                lengths, time is not strictly increasing, or energy is invalid.
+            KeyError: If a requested waveform key is absent.
+        """
+        if deposited_energy is None or deposited_energy <= 0:
+            raise ValueError("deposited_energy must be positive")
+        if simulation_result is not None and (
+            voltage is not None or current is not None
+        ):
+            raise ValueError(
+                "Provide simulation_result or voltage/current arrays, not both"
+            )
+        if simulation_result is not None:
+            if voltage_key not in simulation_result:
+                raise KeyError(f"Missing nonlinear voltage result: {voltage_key}")
+            if current_key not in simulation_result:
+                raise KeyError(f"Missing nonlinear current result: {current_key}")
+            voltage = simulation_result[voltage_key]
+            current = simulation_result[current_key]
+        if voltage is None or current is None:
+            raise ValueError("Provide simulation_result or both voltage and current")
+
+        time = np.asarray(time, dtype=float)
+        voltage = np.asarray(voltage, dtype=float)
+        current = np.asarray(current, dtype=float)
+        if time.ndim != 1 or voltage.ndim != 1 or current.ndim != 1:
+            raise ValueError("time, voltage, and current must be one-dimensional")
+        if not (len(time) == len(voltage) == len(current)):
+            raise ValueError("time, voltage, and current must have equal lengths")
+        if len(time) < 2 or np.any(np.diff(time) < 0):
+            raise ValueError("time must contain at least two strictly increasing samples")
+
+        voltage_0 = float(voltage[0] if baseline_voltage is None else baseline_voltage)
+        current_0 = float(current[0] if baseline_current is None else baseline_current)
+        if not np.isfinite([voltage_0, current_0]).all():
+            raise ValueError("Baseline voltage and current must be finite")
+        joule_power_perturbation = voltage * current - voltage_0 * current_0
+        joule_energy = float(np.trapz(joule_power_perturbation, time))
+        collected_energy = float(-joule_energy)
+        return {
+            "deposited_energy": float(deposited_energy),
+            "joule_energy": joule_energy,
+            "collected_energy": collected_energy,
+            "efficiency": collected_energy / deposited_energy,
+            "integration_time": float(time[-1] - time[0]),
+        }
     
     
     def get_impulse_split(self, index_cinput1 = -1, index_cinput2 = 2, fraction_1 = 0.5, T=None, scale_ev = None):
@@ -647,6 +821,193 @@ class TESModel:
         reverse=True):
             print(name, val, abs(val))    
 
+
+
+def _write_override_file(base_override_file, params, run_dir):
+    """Create a run-local OpenModelica override file.
+
+    Args:
+        base_override_file: Optional source override file.
+        params: Parameter values to replace or append.
+        run_dir: Destination directory for the generated override file.
+
+    Returns:
+        Path to the generated override file.
+    """
+    run_dir = Path(run_dir)
+    base_override_file_basename = Path(base_override_file).stem
+    output = run_dir / f"{base_override_file_basename}_mcmc_override.txt"
+    params = {} if params is None else dict(params)
+    seen = set()
+    lines = []
+
+    if base_override_file is not None and Path(base_override_file).exists():
+        for line in Path(base_override_file).read_text().splitlines():
+            match = re.match(r"^(\s*)([A-Za-z_]\w*)\s*=", line)
+            if match and match.group(2) in params:
+                name = match.group(2)
+                lines.append(f"{name}={params[name]:.17g}")
+                seen.add(name)
+            else:
+                lines.append(line)
+
+    for name, value in params.items():
+        if name not in seen:
+            lines.append(f"{name}={value:.17g}")
+
+    output.write_text("\n".join(lines) + "\n")
+    return output
+
+
+def run_model(
+    model_exe,
+    build_dir,
+    copy_exe = False,
+    override_file=None,
+    params=None,
+    equilibrium_time=20.0,
+    fine_stop_time=0.1,
+    coarse_step_size=2e-4,
+    fine_step_size=1e-6,
+    tolerance=1e-8,
+    solver="dassl",
+    linearized_model_file="linearized_model.py",
+    init_result_file=None,
+    pulse_result_file=None,
+    keep_runs=False,
+    extra_coarse_args=None,
+    extra_fine_args=None,
+):
+    """Run an OpenModelica equilibrium and fine pulse simulation.
+
+    Args:
+        model_exe: Compiled OpenModelica executable, absolute or relative to
+            ``build_dir``.
+        build_dir: Directory containing the executable and generated runtime
+            support files.
+        override_file: Optional base OpenModelica override file.
+        params: Optional dictionary of parameter values that replace or append
+            entries in ``override_file``.
+        equilibrium_time: Coarse equilibrium and linearization stop time.
+        fine_stop_time: Fine pulse simulation stop time.
+        coarse_step_size: Coarse simulation step size in seconds.
+        fine_step_size: Fine simulation step size in seconds.
+        tolerance: OpenModelica solver tolerance.
+        solver: OpenModelica solver name.
+        linearized_model_file: Generated linearized-model filename.
+        init_result_file: Equilibrium result filename. Defaults to the model
+            executable name plus ``_res_init.mat``.
+        pulse_result_file: Fine result filename. Defaults to the model
+            executable name plus ``_res_final.mat``.
+        keep_runs: Keep the temporary run directory after completion or error.
+        extra_coarse_args: Additional coarse simulation arguments.
+        extra_fine_args: Additional fine simulation arguments.
+
+    Returns:
+        A dictionary containing the run directory, override file, result
+        paths, linearized-model path, subprocess logs, and parameter values.
+
+    Raises:
+        subprocess.CalledProcessError: If either OpenModelica simulation fails.
+        OSError: If required files cannot be copied or written.
+    """
+    build_dir = Path(build_dir).resolve()
+    model_exe = Path(model_exe)
+    if not model_exe.is_absolute():
+        model_exe = build_dir / model_exe
+    model_name = model_exe.name
+    base_override_file = (
+        None if override_file is None else Path(override_file).resolve()
+    )
+    init_result_file = init_result_file or f"{model_name}_res_init.mat"
+    pulse_result_file = pulse_result_file or f"{model_name}_res_final.mat"
+    if copy_exe:
+        run_dir = Path(tempfile.mkdtemp(prefix="tes_model_", dir=build_dir))
+    else:
+        run_dir = build_dir
+
+    required = [
+        model_exe,
+        build_dir / f"{model_name}_init.xml",
+        build_dir / f"{model_name}_info.json",
+        build_dir / f"{model_name}_JacA.bin",
+    ]
+    for source in required:
+        if source.exists() and copy_exe:
+            shutil.copy2(source, run_dir / source.name)
+
+    try:
+        generated_override_file = _write_override_file(
+            base_override_file, params, run_dir
+        )
+        params_init = params.copy() if params is not None else {}
+        params_init["Edep"] = 0
+        generated_override_file_init = _write_override_file(
+            generated_override_file, params_init, run_dir
+        )        
+        executable = f"./{model_name}"
+        coarse_args = [
+            executable,
+            f"-overrideFile={generated_override_file.name}",
+            "-startTime=0",
+            f"-stopTime={equilibrium_time}",
+            f"-stepSize={coarse_step_size}",
+            f"-tolerance={tolerance}",
+            f"-s={solver}",
+            "-w",
+            "-outputFormat=mat",
+            f"-r={init_result_file}",
+            f"-l={equilibrium_time}",
+        ] + list(extra_coarse_args or [])
+        fine_args = [
+            executable,
+            f"-r={pulse_result_file}",
+            f"-overrideFile={generated_override_file.name}",
+            f"-s={solver}",
+            "-w",
+            "-startTime=0",
+            f"-stopTime={fine_stop_time}",
+            f"-stepSize={fine_step_size}",
+            f"-tolerance={tolerance}",
+            f"-iif={init_result_file}",
+            f"-iit={equilibrium_time}",
+            "-lv=-LOG_STDOUT",
+        ] + list(extra_fine_args or [])
+
+        logs = {}
+        if equilibrium_time>0:
+            print("Runing coarse simulation")
+            logs["coarse"] = subprocess.run(
+                coarse_args,
+                cwd=run_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        if fine_stop_time>0:
+            print("Runing fine simulation")
+            logs["fine"] = subprocess.run(
+                fine_args,
+                cwd=run_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            
+            
+        return {
+            "run_dir": run_dir,
+            "override_file": generated_override_file,
+            "init_result": run_dir / init_result_file,
+            "pulse_result": run_dir / pulse_result_file,
+            "linearized_model": run_dir / linearized_model_file,
+            "logs": logs,
+            "params": {} if params is None else dict(params),
+        }
+    except Exception:
+        if not keep_runs:
+            shutil.rmtree(run_dir, ignore_errors=True)
+        raise
 
 
 class TESMCMCFit:
@@ -849,64 +1210,40 @@ class TESMCMCFit:
         )
 
     def run_model(self, params):
-        """
-        Run coarse equilibrium, linearization, and fine pulse simulation.
-        """
-        run_dir = self._prepare_run_dir()
-        logs = {}
+        """Run the configured coarse equilibrium and fine pulse simulations.
 
+        Args:
+            params: Parameter values to write into the run-local override file.
+
+        Returns:
+            The standalone ``run_model`` result dictionary, or ``None`` when
+            execution fails. The exception is stored in ``last_error``.
+        """
         try:
-            override_file = self._write_override_file(params, run_dir)
-            exe = f"./{self.model_name}"
-
-            coarse_args = [
-                exe,
-                f"-overrideFile={override_file.name}",
-                "-startTime=0",
-                f"-stopTime={self.equilibrium_time}",
-                f"-stepSize={self.coarse_step_size}",
-                f"-tolerance={self.tolerance}",
-                f"-s={self.solver}",
-                "-w",
-                "-outputFormat=mat",
-                f"-r={self.init_result_file}",
-                f"-l={self.equilibrium_time}",
-            ] + self.extra_coarse_args
-            logs["coarse"] = self._run_subprocess(coarse_args, run_dir)
-
-            fine_args = [
-                exe,
-                f"-r={self.pulse_result_file}",
-                f"-overrideFile={override_file.name}",
-                f"-s={self.solver}",
-                "-w",
-                "-startTime=0",
-                f"-stopTime={self.fine_stop_time}",
-                f"-stepSize={self.fine_step_size}",
-                f"-tolerance={self.tolerance}",
-                f"-iif={self.init_result_file}",
-                f"-iit={self.equilibrium_time}",
-                "-lv=-LOG_STDOUT",
-            ] + self.extra_fine_args
-            logs["fine"] = self._run_subprocess(fine_args, run_dir)
-
-            result = {
-                "run_dir": run_dir,
-                "override_file": override_file,
-                "init_result": run_dir / self.init_result_file,
-                "pulse_result": run_dir / self.pulse_result_file,
-                "linearized_model": run_dir / self.linearized_model_file,
-                "logs": logs,
-                "params": dict(params),
-            }
+            result = run_model(
+                model_exe=self.model_exe,
+                build_dir=self.build_dir,
+                override_file=self.base_override_file,
+                params=params,
+                equilibrium_time=self.equilibrium_time,
+                fine_stop_time=self.fine_stop_time,
+                coarse_step_size=self.coarse_step_size,
+                fine_step_size=self.fine_step_size,
+                tolerance=self.tolerance,
+                solver=self.solver,
+                linearized_model_file=self.linearized_model_file,
+                init_result_file=self.init_result_file,
+                pulse_result_file=self.pulse_result_file,
+                keep_runs=self.keep_runs,
+                extra_coarse_args=self.extra_coarse_args,
+                extra_fine_args=self.extra_fine_args,
+            )
             self.last_result = result
             self.last_error = None
             return result
 
         except Exception as exc:
             self.last_error = exc
-            if not self.keep_runs:
-                shutil.rmtree(run_dir, ignore_errors=True)
             return None
 
     @staticmethod
