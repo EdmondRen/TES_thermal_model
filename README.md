@@ -50,7 +50,15 @@ The most reliable command-line workflow is to create a small `.mos` script for t
 Run the `.mos` script with 
 
 ```bash
+cd scripts # cd into scripts/ first, since path in the script is relative to scripts/
 omc SCRIPT_NAME
+```
+
+There is also a shell script wrapper that can compile any model file with the same settings as in `compile_System_LMO_init.mos`. 
+
+```bash
+cd scripts # cd into scripts/ first, since path in the script is relative to scripts/
+./compile_model.sh MODEL_FILE
 ```
 
 Once the executable is generated, you can directly run the executable file from the command line or python. Here's an example of running it in python through subprocess:
@@ -142,8 +150,9 @@ The Python helpers rely on the naming conventions in Section 4.2. In particular,
 ### 4.2 Convention
 
 **The conventions must be followed for the analysis code to work**
-1. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always name TES c1.** It is optional to give the target the largest index.
-2. For TES bias circuit, always use a current bias with a shunt resistor named `RL`, a loop capacitance named `CL`, and a loop inductance named `L`. 
+1. The model class name must match the file name.
+2. Top level model should use names `c*` and `g*` for heat capacities and thermal conductances. Use 1-based indexing for the variables rather than names. **Always name TES c1.** It is optional to give the target the largest index.
+3. For TES bias circuit, always use a current bias with a shunt resistor named `RL`, a loop capacitance named `CL`, and a loop inductance named `L`. 
 
 
 
@@ -399,7 +408,7 @@ You can generate a svg figure of the model in OMEdit GUI by selecting File->Expo
 
 ### LMO
 
-<img src="System_LMO.svg" width="700" alt="LMO system thermal model" style="background-color: #ffffff; padding: 16px; border-radius: 8px;">
+<img src="models/System_LMO.svg" width="700" alt="LMO system thermal model" style="background-color: #ffffff; padding: 16px; border-radius: 8px;">
 
 
 ### Notes on TES resistance

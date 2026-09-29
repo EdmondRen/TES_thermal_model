@@ -13,7 +13,10 @@ import matplotlib.pyplot as plt
 
 
 
-    
+if np.lib.NumpyVersion(np.__version__) < "2.4.0":
+    trapz = np.trapz
+else:
+    trapz = np.trapezoid
     
 def get_impulse_response(A, input_index, T=None, input_scale=1.0):
     """
@@ -71,7 +74,15 @@ class TESModel:
     by impedance, responsivity, and noise calculations.
     """
 
-    def __init__(self, linearized_model_filename, full_model_filename, simulation_results_filename, config, f_min = 1, f_max = 100e3, points = 1000, frequencies : np.ndarray | None = None):
+    def __init__(self, 
+                 linearized_model_filename, 
+                 full_model_filename, 
+                 simulation_results_filename, 
+                 config, 
+                 f_min = 1, f_max = 100e3,
+                 f_scale = "linear",
+                 points = 1000, 
+                 frequencies : np.ndarray | None = None):
         """
         Create a TES frequency-domain model.
 
@@ -104,6 +115,8 @@ class TESModel:
         f_min, f_max , points: float, optional
             Minimum and maximum frequencies in Hz for the logarithmic analysis
             grid; Number of frequency samples between ``f_min`` and ``f_max``.
+        f_scale: string
+            "linear" or "log", default is linear
         frequencies: list | np.ndarray | None
             Frequency grid to evaluate the model, has higher priority than (f_min, f_max and points). If frequencies is given, will ignore the frequency range 
 
@@ -122,9 +135,15 @@ class TESModel:
         self.config = config
         
         if frequencies is None:
-            self.frequencies = np.logspace(np.log10(f_min), np.log10(f_max), points)
+            if f_scale == "linear":
+                self.frequencies = np.linspace((f_min), (f_max), points)
+            elif f_scale == "log":
+                self.frequencies = np.logspace(np.log10(f_min), np.log10(f_max), points)
+            self.f_scale = f_scale
+                
         else:
             self.frequencies = frequencies
+            self.f_scale = None
         self.iw = 2j*np.pi*self.frequencies
 
         # Load models
@@ -461,7 +480,7 @@ class TESModel:
 
         return self.frequencies, self.noise_current
     
-    def get_resolution(self, dIdP = None, index_cinput = -1):
+    def get_resolution(self, dIdP = None, index_cinput = -1, fmin = None, fmax = None, n_interp=None):
         if not hasattr(self, "noise_current_total"):
             raise ValueError("Run get_noise() first!")
         
@@ -469,14 +488,45 @@ class TESModel:
         self.noise_power = {key: abs(self.noise_current[key]/dIdP) for key in self.noise_current}
         self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
 
-        # Integrate the NEP
+        # Integration limits
+        f_low = self.frequencies[0] if fmin is None else fmin
+        f_high = self.frequencies[-1] if fmax is None else fmax
+
+        if f_low < self.frequencies[0]:
+            raise ValueError(
+                f"fmin={f_low} is below the minimum available frequency "
+                f"{self.frequencies[0]}"
+            )
+
+        if f_high > self.frequencies[-1]:
+            raise ValueError(
+                f"fmax={f_high} is above the maximum available frequency "
+                f"{self.frequencies[-1]}"
+            )
+        if f_low >= f_high:
+            raise ValueError("fmin must be smaller than fmax.")            
+
+        # Interpolate integrand onto fine grid
+        if n_interp is None:
+            if self.f_scale is None:
+                n_interp = len(self.frequencies)
+            else:
+                n_interp = len(self.frequencies)*10
+        frequencies_interp = np.linspace(f_low, f_high, n_interp)
         integrand = 1 / self.noise_power_square_sum
-        self.noise_power_integral = np.trapz(
-            integrand,
+        integrand_interp = np.interp(
+            frequencies_interp,
             self.frequencies,
+            integrand,
+        )
+        
+        # Integrate the NEP
+        self.noise_power_integral = trapz(
+            integrand_interp,
+            frequencies_interp,
         )        
         # Compute the resolution of our detector
-        self.resolution_sigma = np.sqrt(4.*self.noise_power_integral)**(-1.)
+        self.resolution_sigma = 1/np.sqrt(4.*self.noise_power_integral)
         self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
         
         return self.resolution_sigma_ev
@@ -484,7 +534,8 @@ class TESModel:
     def get_resolution_split(self, 
                             index_cinput1 = 2, 
                             index_cinput2 = 2, 
-                            fraction_1 = 0.5):
+                            fraction_1 = 0.5,
+                            fmin = None, fmax = None):
         """
         Calcuate resolution when splitting the input energy in two heat capacities.
         """    
@@ -492,7 +543,7 @@ class TESModel:
         dIdP_1 = self.get_dIdP(index_cinput = index_cinput1)
         dIdP_2 = self.get_dIdP(index_cinput = index_cinput2)
         self.dIdP_combined = dIdP_1*fraction_1 + dIdP_2 * (1-fraction_1)
-        self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined)
+        self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined, fmin = fmin, fmax = fmax)
         return self.resolution_combined_sigma_ev
     
     def get_impulse(self, index = -1, index_cinput = -1, T=None):
@@ -687,7 +738,7 @@ class TESModel:
         if not np.isfinite([voltage_0, current_0]).all():
             raise ValueError("Baseline voltage and current must be finite")
         joule_power_perturbation = voltage * current - voltage_0 * current_0
-        joule_energy = float(np.trapz(joule_power_perturbation, time))
+        joule_energy = float(trapz(joule_power_perturbation, time))
         collected_energy = float(-joule_energy)
         return {
             "deposited_energy": float(deposited_energy),
@@ -771,7 +822,7 @@ class TESModel:
         return plt.gcf(), plt.gca()
     
         
-    def plot_impedance(self, include_L = True):
+    def plot_impedance(self, include_L = True, fmin = None, fmax=None):
         model = self
         if include_L:
             didv = model.get_dIdV()
@@ -779,24 +830,35 @@ class TESModel:
         else:
             dvdi = model.get_impedance()
 
+        # Frequency limit
+        mask = None
+        if fmin is not None:
+            mask = model.frequencies > fmin
+        if fmax is not None:
+            mask = model.frequencies < fmax if mask is None else mask & (model.frequencies < fmax)            
+
         fig, axs = plt.subplots(1,2, figsize=(12,4))
 
         plt.sca(axs[0])
-        plt.plot(model.frequencies, np.abs(dvdi))
+        plt.plot(model.frequencies[mask], np.abs(dvdi[mask]))
         plt.xscale("log")
         plt.grid(which="both", alpha=0.2)
         plt.xlabel("Frequency [Hz]")
         plt.ylabel(r"|$Z_{circ}$| [$\Omega$]")
         ax0_twin = plt.gca().twinx()
-        ax0_twin.plot(model.frequencies, np.angle(dvdi)/np.pi*180, color='C1', linestyle="-.")
+        ax0_twin.plot(model.frequencies[mask], np.angle(dvdi[mask])/np.pi*180, color='C1', linestyle="-.")
         ax0_twin.tick_params(axis='y', colors='C1')
         ax0_twin.yaxis.label.set_color('C1')
         ax0_twin.spines['right'].set_color('C1') 
         ax0_twin.set_ylabel(r"$\angle (Z_{circ})$ [$^o$]")
 
 
+    
         plt.sca(axs[1])
-        plt.plot(dvdi.real, dvdi.imag)
+        if mask is None:
+            plt.plot(dvdi.real, dvdi.imag)
+        else:
+            plt.plot(dvdi.real[mask], dvdi.imag[mask])
         plt.grid(alpha=0.2)
         plt.axhline(0,color="grey")
         plt.axvline(0,color="grey")
@@ -968,6 +1030,7 @@ def run_model(
             "-startTime=0",
             f"-stopTime={fine_stop_time}",
             f"-stepSize={fine_step_size}",
+            f"-maxStepSize={fine_step_size*3}"
             f"-tolerance={tolerance}",
             f"-iif={init_result_file}",
             f"-iit={equilibrium_time}",
@@ -2158,7 +2221,25 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
             content = content.replace(search_text, replace_text)            
 
         
+        search_text = f"m=TES_m"
+        replace_text = f"C={data[f'c1.C'][-1]:.3g}"
+        content = content.replace(search_text, replace_text)
         
+        search_text = f"=TES_Tc"
+        replace_text = f"={data[f'c1.T'][-1]:.3g}"
+        content = content.replace(search_text, replace_text)
+
+        search_text = f"=Tb"
+        replace_text = f"={data[f'fixedTemperature.T'][-1]*1e3:.3g} mK"
+        content = content.replace(search_text, replace_text)
+
+        search_text = f"=Bias_R<"
+        replace_text = f"={data[f'Bias_R'][-1]*1e3:.3g} mOhm<"
+        content = content.replace(search_text, replace_text)
+
+        search_text = f"=Bias_Rp"
+        replace_text = f"={data[f'Bias_Rp'][-1]*1e3:.3g} mOhm"
+        content = content.replace(search_text, replace_text)
 
     # Open the file in write mode to overwrite it
     with open(output_filename, "w") as file:

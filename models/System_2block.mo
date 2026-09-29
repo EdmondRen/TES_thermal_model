@@ -15,7 +15,7 @@ model System_2block
     Placement(transformation(origin = {-82, 70}, extent = {{-6, -6}, {6, 6}}, rotation = 90)));
   libTES.ThermlConductanceN g1(K = K1, n = 5) annotation(
     Placement(transformation(origin = {-4, 14}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
-  libTES.ThermlConductanceN g2(K = K2, n = 2) annotation(
+  libTES.ThermlConductanceN g2(K = K2, n = 5) annotation(
     Placement(transformation(origin = {12, 26}, extent = {{-10, -10}, {10, 10}})));
   libTES.SourceExp edep_target(fallTimeConst = Edep_falltimetarget, offset = 0, outMax = Edep*1.6e-19*Edep_fractiontarget/Edep_falltimetarget, startTime = Edep_starttime) annotation(
     Placement(transformation(origin = {-84, 26}, extent = {{-6, -6}, {6, 6}})));
@@ -23,9 +23,9 @@ model System_2block
     Placement(transformation(origin = {-60, 70}, extent = {{-6, -6}, {6, 6}}, rotation = -90)));
   Modelica.Electrical.Analog.Basic.Resistor Rp(R = Bias_Rp, useHeatPort = false) annotation(
     Placement(transformation(origin = {-46, 76}, extent = {{-6, -6}, {6, 6}})));
-  libTES.HeatCapacitorPoly c2(T(start = TES_Tinit), a1 = a1_gold, a3 = a3_gold, a5 = a5_gold, m = m2) annotation(
+  libTES.HeatCapacitorPoly c2(T(start = TES_Tinit), a1 = a1_silicon, a3 = a3_silicon, a5 = a5_silicon, m = m2) annotation(
     Placement(transformation(origin = {26, 38}, extent = {{-10, -10}, {10, 10}})));
-  libTES.ThermlConductanceN g3(K = K3, n = 5) annotation(
+  libTES.ThermlConductanceN g3(K = K3, n = 2) annotation(
     Placement(transformation(origin = {26, 14}, extent = {{-10, -10}, {10, 10}}, rotation = -90)));
   // Parameters
   // IMPORTANT: The parameters below are set to Evaluate=false to avoid them being evaluated during compilation. This is necessary because the model is compiled before the parameters are set in the simulation script.
@@ -33,31 +33,31 @@ model System_2block
   parameter Real Edep = 200 "[eV], energy deposition" annotation(Evaluate=false);
   parameter Real Edep_time = 1.00e-7 "[s], time for energy deposition" annotation(Evaluate=false);
   parameter Real Edep_fractiontarget = 1 "Fraction of energy in target" annotation(Evaluate=false);
-  parameter Real Edep_falltimetarget = 0.3e-3 "Phonon thermalization time constant in target" annotation(Evaluate=false);
-  parameter Real Edep_falltimefilm = 0.3e-3 "Phonon thermalization time constant in film" annotation(Evaluate=false);
+  parameter Real Edep_falltimetarget = 0.001e-3 "Phonon thermalization time constant in target" annotation(Evaluate=false);
+  parameter Real Edep_falltimefilm = 0.001e-3 "Phonon thermalization time constant in film" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Time Edep_starttime = 1e-3 "Start time of energy deposition" annotation(Evaluate=false);
   //  - Electrical, bias
-  parameter Modelica.Units.SI.Current Bias_I = 36.1e-6 "Bias current" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Current Bias_I = 16.1e-6 "Bias current" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Resistance Bias_R = 2.00e-2 "Load resistance (Rsh)" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Resistance Bias_Rp = 1.50e-2 "Load resistance (Rp)" annotation(Evaluate=false);  
   parameter Modelica.Units.SI.Inductance Bias_L = 3.00e-7 "Bias circuit indutance" annotation(Evaluate=false);
   parameter Modelica.Units.SI.Capacitance Bias_C = 20e-12 "Bias circuit capacitance" annotation(Evaluate=false);
   //  - Electrical, TES
-  parameter Modelica.Units.SI.Resistance TES_Rn = 0.175 "TES normal resistance" annotation(Evaluate=false);
-  parameter Modelica.Units.SI.Temperature TES_Tc = 0.021 "TES critical temp." annotation(Evaluate=false);
-  parameter Modelica.Units.SI.Temperature TES_Tinit = 0.021 "Initial guess of TES temperature" annotation(Evaluate=false);
-  parameter Real TES_alpha = 20 "TES alpha" annotation(Evaluate=false);
-  parameter Real TES_beta = 1 "TES beta" annotation(Evaluate=false);
-  parameter Modelica.Units.SI.Current TES_I0 = 5e-6 "TES Current where beta is evaluated" annotation(Evaluate=false);
-  parameter Modelica.Units.SI.Mass TES_m = 6.53e-12 "TES mass" annotation(Evaluate=false);
-  parameter Real TES_a1 = 5.00e-2 "TES heat capacity linear term" annotation(Evaluate=false);
-  parameter Real TES_a3 = 9.24e-4 "TES heat capacity cubic term" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Resistance TES_Rn = 0.330 "TES normal resistance" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Temperature TES_Tc = 0.046 "TES critical temp." annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Temperature TES_Tinit = 0.047 "Initial guess of TES temperature" annotation(Evaluate=false);
+  parameter Real TES_alpha = 40 "TES alpha" annotation(Evaluate=false);
+  parameter Real TES_beta = 0.5 "TES beta" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Current TES_I0 = 11e-6 "TES Current where beta is evaluated" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass TES_m = 1.16e-10 "TES mass" annotation(Evaluate=false);
+  parameter Real TES_a1 = 1.01E-03 "TES heat capacity linear term" annotation(Evaluate=false);
+  parameter Real TES_a3 = 3.45E-05 "TES heat capacity cubic term" annotation(Evaluate=false);
   //  - Thermal, conductance
-  parameter Real K1 = 7.99e-05   "Absorber -> Goldpad" annotation(Evaluate=false);
-  parameter Real K2 = 1.2e-7   "Goldpad -> Goldwirebond" annotation(Evaluate=false);
-  parameter Real K3 = 7.99e-05   "Goldwirebond -> Goldpad(TES1)" annotation(Evaluate=false);
+  parameter Real K1 = 1.92e-12   "TES -> Bath" annotation(Evaluate=false);
+  parameter Real K2 = 1.92e-6     "TES -> Si" annotation(Evaluate=false);
+  parameter Real K3 = 7.99e-3   "Si->Bath" annotation(Evaluate=false);
   //  - Thermal, heat capacity
-  parameter Modelica.Units.SI.Mass m2 = 6.07e-14 "Gold (target gold pad)" annotation(Evaluate=false);
+  parameter Modelica.Units.SI.Mass m2 = 1e-3 "Si, 1gram" annotation(Evaluate=false);
   parameter Real a1_target = 6.95e-7 annotation(Evaluate=false);
   parameter Real a3_target = 2.18e-6 annotation(Evaluate=false);
   parameter Real a5_target = 0 annotation(Evaluate=false);
