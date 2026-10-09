@@ -83,7 +83,7 @@ package libTES
     n.i = -i;
 // TES Resistance. Joule heating generated internally
     // R = Rn/2*(1. + tanh((T - Tc)*alpha0/Tc) + (i - I0)*beta0/I0);
-    R = Rn/2*(1. + tanh(alpha0/Tc * (T - Tc * (1+beta0/alpha0/p0) * (1 - (abs(i)/I0)^p0 * beta0 / (p0+alpha0 + beta0)) ) ));
+    R = Rn/2*(1. + tanh(alpha0/Tc * (T - Tc * (1+beta0/alpha0/p0) * (1 - (abs(i)/I0)^p0 * beta0 / (p0*alpha0 + beta0)) ) ));
     v = R*i;
     P_Joule = v*i;
 // Heat capacity (temperature dependent)

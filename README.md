@@ -309,12 +309,25 @@ Readout noise directly adds on top of the current noise. Thus, it does not invol
 
 #### 5.2.4 Noise Equivalent Power (NEP)
 
+For a finite nonlinear pulse, `TESModel.get_nonlinear_energy_template`
+converts the simulated TES-current waveform into a one-sided energy template:
+
+```math
+S_E(f) = \frac{\Delta \widetilde{I}(f)}{E_{dep}}.
+```
+
+The helper removes the current baseline, handles duplicate OpenModelica event
+timestamps, resamples onto a uniform grid, and applies the continuous-time FFT
+normalization. The resulting A/W response can be supplied to `get_resolution`
+over the FFT's supported frequency range. It is a secant response for that
+finite pulse energy, not a local derivative of the nonlinear model.
+
 
 ### 5.3 Collection efficiency.
 
 Define collection efficiency as:
 
-    efficiency = integrated Joule-energy perturbation / deposited energy
+    efficiency = -integrated Joule-energy perturbation / deposited energy
 
   - For the linear model, calculate first-order Joule perturbation using
     the normalized state-space matrices and operating-point TES voltage/
@@ -322,9 +335,11 @@ Define collection efficiency as:
 
     δP_Joule = V0 * δI + I0 * δV
 
-    Use the state-transition integral analytically from A and the
-    impulse input vector, with an optional finite integration endpoint
-    and a stable-system validation.
+    Pass an energy-scaled state response and its time samples to
+    `get_linear_phonon_energy_collection_efficiency`. The helper integrates
+    the existing response instead of solving it again. It reconstructs the
+    TES-voltage integral from the `CL_v` state while accounting for the
+    series parasitic resistance and inductor voltage drops.
 
   - For nonlinear results, accept the complete time series/result
     dictionary, use c1.v and c1.i by default, subtract the baseline

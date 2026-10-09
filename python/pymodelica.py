@@ -312,7 +312,7 @@ class TESModel:
     
     def get_dIdV(self):
         """
-        Compute TES current responsivity to external voltage excitation.
+        Compute the complex impedance of entire TES circuit (Z_tes + iwL + Rp).
 
         Returns
         -------
@@ -326,11 +326,7 @@ class TESModel:
             
     def get_impedance(self):
         """
-        Compute the complex TES impedance from voltage and current response.
-
-        The method excites the external voltage input, solves for the TES
-        current response, subtracts the inductive voltage contribution, and
-        returns ``dV / dI``.
+        Compute the TES impedance, excluding circuit components 
 
         Returns
         -------
@@ -338,14 +334,100 @@ class TESModel:
             Complex impedance sampled on ``self.frequencies``. The value is
             also stored as ``self.Z_TES``.
         """
-        d_Vext = np.zeros(self.nparams)
-        d_Vext[0] = self.index_cload_v
-        solution = self.get_solution_full(d_Vext, norm = True)
-        dI = solution[:, self.index_tes_i]
-        dV = solution[:, self.index_cload_v] - self.iw * self.simulation_results["L.L"][-1] * dI
-        self.Z_TES = dV/dI
+        dIdV = self.get_dIdV()
+        dVdI = 1/dIdV
+        self.Z_TES = dVdI - self.iw * self.simulation_results["L.L"][-1] - self.simulation_results["Rp.R"][-1]
         return self.Z_TES
-    
+
+
+    def get_alpha_beta(self, T=None, I=None):
+        """Calculate local TES2 logarithmic resistance derivatives.
+
+        The derivatives are evaluated from the exact resistance equation used
+        by ``libTES.TES2`` rather than from the calibration parameters alone:
+
+        ``alpha = (T / R) * dR/dT`` and
+        ``beta = (I / R) * dR/dI``.
+
+        Args:
+            T: TES temperature in kelvin. If omitted, use the final
+                ``c1.T`` value from the simulation results.
+            I: TES current in amperes. If omitted, use the final ``c1.i``
+                value from the simulation results.
+
+        Returns:
+            A tuple ``(alpha, beta)``. Scalar inputs produce scalar floats;
+            array-like inputs are broadcast and produce NumPy arrays.
+
+        Raises:
+            KeyError: If a required TES2 parameter or default state result is
+                missing.
+            ValueError: If inputs or TES2 parameters are non-finite, or if
+                the resistance equation contains a singular parameter.
+        """
+        def last_result_value(key):
+            if key not in self.simulation_results:
+                raise KeyError(f"Missing TES2 simulation result: {key}")
+            values = np.asarray(self.simulation_results[key])
+            if values.size == 0:
+                raise ValueError(f"TES2 simulation result is empty: {key}")
+            return values.flat[-1]
+
+        T_value = last_result_value("c1.T") if T is None else T
+        I_value = last_result_value("c1.i") if I is None else I
+        parameter_names = ("Tc", "I0", "alpha0", "beta0", "p0")
+        parameters = {
+            name: float(last_result_value(f"c1.{name}"))
+            for name in parameter_names
+        }
+
+        T_value, I_value = np.broadcast_arrays(
+            np.asarray(T_value, dtype=float),
+            np.asarray(I_value, dtype=float),
+        )
+        if not np.all(np.isfinite(T_value)) or not np.all(np.isfinite(I_value)):
+            raise ValueError("T and I must contain only finite values")
+        if not all(np.isfinite(value) for value in parameters.values()):
+            raise ValueError("TES2 parameters must contain only finite values")
+
+        Tc = parameters["Tc"]
+        I0 = parameters["I0"]
+        alpha0 = parameters["alpha0"]
+        beta0 = parameters["beta0"]
+        p0 = parameters["p0"]
+        denominator = p0 * alpha0 + beta0
+        if Tc == 0 or I0 <= 0 or alpha0 == 0 or p0 <= 0 or denominator == 0:
+            raise ValueError(
+                "TES2 parameters must satisfy Tc != 0, I0 > 0, alpha0 != 0, "
+                "p0 > 0, and p0 + alpha0 + beta0 != 0"
+            )
+
+        current_power = (np.abs(I_value) / I0) ** p0
+        resistance_argument = alpha0 / Tc * (
+            T_value
+            - Tc
+            * (1 + beta0 / alpha0 / p0)
+            * (1 - current_power * beta0 / denominator)
+        )
+        transition_factor = 1 - np.tanh(resistance_argument)
+
+        alpha = T_value * alpha0 / Tc * transition_factor
+        beta = (
+            alpha0
+            / Tc
+            * Tc
+            * (1 + beta0 / alpha0 / p0)
+            * p0
+            * beta0
+            / denominator
+            * current_power
+            * transition_factor
+        )
+
+        if alpha.ndim == 0:
+            return float(alpha), float(beta)
+        return alpha, beta
+
 
     
     @staticmethod
@@ -576,26 +658,27 @@ class TESModel:
 
     def get_linear_phonon_energy_collection_efficiency(
         self,
-        index_cinput=-1,
-        deposited_energy=1.0,
-        t_end=None,
+        time,
+        impulse_response,
+        deposited_energy,
         voltage_key="c1.v",
         current_key="c1.i",
     ):
-        """Calculate Joule-energy collection for the linearized model.
+        """Calculate Joule-energy collection from a linear impulse response.
 
         The linearized TES Joule-power perturbation is evaluated to first
-        order as ``V0 * delta_I + I0 * delta_V``. The state-transition
-        integral is calculated directly from the model matrix, avoiding a
-        time-grid approximation.
+        order as ``V0 * delta_I + I0 * delta_V``. The supplied state response
+        must already be scaled to the deposited energy. The TES-voltage
+        integral is reconstructed from the load-capacitor voltage using the
+        series parasitic resistance and inductor voltage drops.
 
         Args:
-            index_cinput: One-based heat-capacity index, or a negative index
-                counted from the final heat-capacity state.
-            deposited_energy: Energy represented by the impulse, in joules.
-            t_end: Optional finite integration endpoint in seconds. If it is
-                omitted, the response is integrated to infinity and the
-                linearized system must be stable.
+            time: Strictly increasing impulse-response samples in seconds.
+            impulse_response: Energy-scaled state perturbations with shape
+                ``(len(time), nparams)``, such as a scaled result from
+                :meth:`get_impulse` or :meth:`get_impulse_split`.
+            deposited_energy: Energy represented by ``impulse_response``, in
+                joules.
             voltage_key: Simulation-result key containing the operating-point
                 TES voltage.
             current_key: Simulation-result key containing the operating-point
@@ -606,51 +689,62 @@ class TESModel:
             ``collected_energy``, ``efficiency``, and ``integration_time``.
 
         Raises:
-            ValueError: If the energy, integration endpoint, or operating
-                point is invalid, or if an infinite integral is requested
-                for an unstable model.
-            numpy.linalg.LinAlgError: If the state matrix cannot be solved.
+            KeyError: If a required operating-point result is missing.
+            ValueError: If the energy, response arrays, operating point, or
+                circuit parameters are invalid.
         """
-        if deposited_energy <= 0:
+        if not np.isfinite(deposited_energy) or deposited_energy <= 0:
             raise ValueError("deposited_energy must be positive")
-        if t_end is not None and t_end <= 0:
-            raise ValueError("t_end must be positive when provided")
         if voltage_key not in self.simulation_results:
             raise KeyError(f"Missing operating-point voltage result: {voltage_key}")
         if current_key not in self.simulation_results:
             raise KeyError(f"Missing operating-point current result: {current_key}")
+        if "L.L" not in self.simulation_results:
+            raise KeyError("Missing circuit inductance result: L.L")
+
+        time = np.asarray(time, dtype=float)
+        impulse_response = np.asarray(impulse_response, dtype=float)
+        if time.ndim != 1:
+            raise ValueError("time must be one-dimensional")
+        if len(time) < 2 or np.any(np.diff(time) <= 0):
+            raise ValueError(
+                "time must contain at least two strictly increasing samples"
+            )
+        expected_shape = (len(time), self.nparams)
+        if impulse_response.shape != expected_shape:
+            raise ValueError(
+                "impulse_response must have shape "
+                f"{expected_shape}, got {impulse_response.shape}"
+            )
+        if not np.all(np.isfinite(time)) or not np.all(
+            np.isfinite(impulse_response)
+        ):
+            raise ValueError("time and impulse_response must contain finite values")
 
         voltage_0 = float(self.simulation_results[voltage_key][-1])
         current_0 = float(self.simulation_results[current_key][-1])
-        if not np.isfinite([voltage_0, current_0]).all():
-            raise ValueError("Operating-point voltage and current must be finite")
-        state_index = self._heat_capacity_state_index(index_cinput)
-        input_vector = np.zeros(self.nparams)
-        input_vector[state_index] = (
-            self.external_input_coeff[state_index] * deposited_energy
-        )
-
-        state_matrix = np.asarray(self.model["A"], dtype=float)
-        if t_end is None:
-            max_real_pole = np.max(np.linalg.eigvals(state_matrix).real)
-            if max_real_pole >= 0:
-                raise ValueError(
-                    "An infinite impulse-response integral requires a stable "
-                    f"linearized model; maximum pole real part is {max_real_pole:g}"
-                )
-            state_integral = -np.linalg.solve(state_matrix, input_vector)
-            integration_time = np.inf
-        else:
-            state_transition = scipy.linalg.expm(state_matrix * t_end)
-            state_integral = np.linalg.solve(
-                state_matrix,
-                (state_transition - np.eye(self.nparams)).dot(input_vector),
+        inductance = float(self.simulation_results["L.L"][-1])
+        series_resistance = 0.0
+        if "Rp.R" in self.simulation_results:
+            series_resistance = float(self.simulation_results["Rp.R"][-1])
+        if not np.isfinite(
+            [voltage_0, current_0, inductance, series_resistance]
+        ).all():
+            raise ValueError(
+                "Operating-point values and circuit parameters must be finite"
             )
-            integration_time = float(t_end)
 
+        delta_load_voltage = impulse_response[:, self.index_cload_v]
+        delta_current = impulse_response[:, self.index_tes_i]
+        integrated_current = float(trapz(delta_current, time))
+        integrated_tes_voltage = float(
+            trapz(delta_load_voltage, time)
+            - series_resistance * integrated_current
+            - inductance * (delta_current[-1] - delta_current[0])
+        )
         joule_energy = float(
-            voltage_0 * state_integral[self.index_tes_i]
-            + current_0 * state_integral[self.index_cload_v]
+            voltage_0 * integrated_current
+            + current_0 * integrated_tes_voltage
         )
         collected_energy = float(-joule_energy)
         return {
@@ -658,8 +752,124 @@ class TESModel:
             "joule_energy": joule_energy,
             "collected_energy": collected_energy,
             "efficiency": collected_energy / deposited_energy,
-            "integration_time": integration_time,
+            "integration_time": float(time[-1] - time[0]),
         }
+
+    def get_nonlinear_energy_template(
+        self,
+        time,
+        deposited_energy,
+        simulation_result=None,
+        current=None,
+        current_key="c1.i",
+        baseline_current=None,
+        baseline_samples=10,
+    ):
+        """Convert a nonlinear current pulse into an energy template.
+
+        This computes the one-sided continuous-time Fourier transform of the
+        baseline-subtracted current pulse, normalized by the deposited energy.
+        The result is a finite-energy secant response rather than a local
+        derivative of the nonlinear model. Its units are A/W, matching the
+        frequency-domain ``dI/dP`` used by :meth:`get_resolution`.
+
+        OpenModelica result files can repeat timestamps at events. Repeated
+        timestamps are collapsed by retaining their final sample, after which
+        the current is interpolated onto a uniform grid for the FFT.
+
+        Args:
+            time: Nondecreasing simulation timestamps in seconds.
+            deposited_energy: Energy represented by the current pulse, in
+                joules.
+            simulation_result: Optional result dictionary returned by
+                :func:`load`. Use this or provide ``current`` directly.
+            current: Optional TES current waveform in amperes.
+            current_key: Result key for the TES current waveform.
+            baseline_current: Optional operating-point current in amperes. If
+                omitted, average the first ``baseline_samples`` unique samples.
+            baseline_samples: Number of initial unique samples used for the
+                default baseline.
+
+        Returns:
+            A tuple ``(frequencies, dIdE)`` containing the one-sided FFT
+            frequencies in hertz, including DC, and the complex normalized
+            energy template in A/W.
+
+        Raises:
+            KeyError: If ``current_key`` is absent from ``simulation_result``.
+            ValueError: If the energy, waveform, timestamps, baseline, or
+                baseline sample count is invalid.
+        """
+        if not np.isfinite(deposited_energy) or deposited_energy <= 0:
+            raise ValueError("deposited_energy must be positive")
+        if simulation_result is not None and current is not None:
+            raise ValueError("Provide simulation_result or current, not both")
+        if simulation_result is not None:
+            if current_key not in simulation_result:
+                raise KeyError(f"Missing nonlinear current result: {current_key}")
+            current = simulation_result[current_key]
+        if current is None:
+            raise ValueError("Provide simulation_result or current")
+        if not isinstance(baseline_samples, (int, np.integer)):
+            raise ValueError("baseline_samples must be a positive integer")
+        if baseline_samples <= 0:
+            raise ValueError("baseline_samples must be a positive integer")
+
+        time = np.asarray(time, dtype=float)
+        current = np.asarray(current, dtype=float)
+        if time.ndim != 1 or current.ndim != 1:
+            raise ValueError("time and current must be one-dimensional")
+        if len(time) != len(current):
+            raise ValueError("time and current must have equal lengths")
+        if len(time) < 2 or np.any(np.diff(time) < 0):
+            raise ValueError(
+                "time must contain at least two nondecreasing samples"
+            )
+        if not np.all(np.isfinite(time)) or not np.all(np.isfinite(current)):
+            raise ValueError("time and current must contain finite values")
+
+        _, reverse_indices = np.unique(time[::-1], return_index=True)
+        unique_indices = np.sort(len(time) - 1 - reverse_indices)
+        unique_time = time[unique_indices]
+        unique_current = current[unique_indices]
+        if len(unique_time) < 2:
+            raise ValueError("time must contain at least two unique samples")
+        if baseline_current is None and baseline_samples > len(unique_current):
+            raise ValueError(
+                "baseline_samples cannot exceed the number of unique samples"
+            )
+
+        if baseline_current is None:
+            baseline = float(np.mean(unique_current[:baseline_samples]))
+        else:
+            baseline = float(baseline_current)
+        if not np.isfinite(baseline):
+            raise ValueError("baseline_current must be finite")
+
+        sample_interval = float(np.median(np.diff(unique_time)))
+        if not np.isfinite(sample_interval) or sample_interval <= 0:
+            raise ValueError("time must define a positive sample interval")
+        uniform_sample_count = int(
+            np.floor((unique_time[-1] - unique_time[0]) / sample_interval)
+        ) + 1
+        if uniform_sample_count < 2:
+            raise ValueError("time must span at least one sample interval")
+        uniform_time = (
+            unique_time[0] + np.arange(uniform_sample_count) * sample_interval
+        )
+        uniform_current = np.interp(
+            uniform_time,
+            unique_time,
+            unique_current,
+        )
+        delta_current = uniform_current - baseline
+        frequencies = np.fft.rfftfreq(uniform_sample_count, sample_interval)
+        dIdE = (
+            sample_interval
+            * np.fft.rfft(delta_current)
+            / float(deposited_energy)
+        )
+        return frequencies, dIdE
 
     def get_nonlinear_phonon_energy_collection_efficiency(
         self,
@@ -822,12 +1032,21 @@ class TESModel:
         return plt.gcf(), plt.gca()
     
         
-    def plot_impedance(self, include_L = True, fmin = None, fmax=None):
+    def plot_impedance(self, content = "dvdi", fmin = None, fmax=None):
+        """
+        Plot the impedance, with an option to plot
+          dIdV
+          dVdI
+          ztes: TES impedance (dVdI - Rp - iwL)
+        """
+        
         model = self
-        if include_L:
+        if content == "didv":
+            dvdi = model.get_dIdV()
+        elif content == "dvdi":
             didv = model.get_dIdV()
             dvdi = 1/didv
-        else:
+        elif content == "ztes":
             dvdi = model.get_impedance()
 
         # Frequency limit
@@ -862,6 +1081,7 @@ class TESModel:
         plt.grid(alpha=0.2)
         plt.axhline(0,color="grey")
         plt.axvline(0,color="grey")
+        plt.gca().set_aspect('equal', adjustable='box')
         plt.xlabel(r"Real($Z_{circ}$) [$\Omega$]")
         plt.ylabel(r"Imag($Z_{circ}$) [$\Omega$]")
 
@@ -924,7 +1144,7 @@ def _write_override_file(base_override_file, params, run_dir):
 def run_model(
     model_exe,
     build_dir,
-    copy_exe = False,
+    copy_exe=False,
     override_file=None,
     params=None,
     equilibrium_time=20.0,
@@ -939,6 +1159,7 @@ def run_model(
     keep_runs=False,
     extra_coarse_args=None,
     extra_fine_args=None,
+    verbose=True,
 ):
     """Run an OpenModelica equilibrium and fine pulse simulation.
 
@@ -947,6 +1168,8 @@ def run_model(
             ``build_dir``.
         build_dir: Directory containing the executable and generated runtime
             support files.
+        copy_exe: Run from an isolated temporary copy of the executable and
+            runtime support files.
         override_file: Optional base OpenModelica override file.
         params: Optional dictionary of parameter values that replace or append
             entries in ``override_file``.
@@ -964,6 +1187,7 @@ def run_model(
         keep_runs: Keep the temporary run directory after completion or error.
         extra_coarse_args: Additional coarse simulation arguments.
         extra_fine_args: Additional fine simulation arguments.
+        verbose: Print coarse/fine simulation progress messages.
 
     Returns:
         A dictionary containing the run directory, override file, result
@@ -1002,11 +1226,6 @@ def run_model(
         generated_override_file = _write_override_file(
             base_override_file, params, run_dir
         )
-        params_init = params.copy() if params is not None else {}
-        params_init["Edep"] = 0
-        generated_override_file_init = _write_override_file(
-            generated_override_file, params_init, run_dir
-        )        
         executable = f"./{model_name}"
         coarse_args = [
             executable,
@@ -1030,7 +1249,7 @@ def run_model(
             "-startTime=0",
             f"-stopTime={fine_stop_time}",
             f"-stepSize={fine_step_size}",
-            f"-maxStepSize={fine_step_size*3}"
+            f"-maxStepSize={fine_step_size*3}",
             f"-tolerance={tolerance}",
             f"-iif={init_result_file}",
             f"-iit={equilibrium_time}",
@@ -1038,8 +1257,9 @@ def run_model(
         ] + list(extra_fine_args or [])
 
         logs = {}
-        if equilibrium_time>0:
-            print("Runing coarse simulation")
+        if equilibrium_time > 0:
+            if verbose:
+                print("Running coarse simulation")
             logs["coarse"] = subprocess.run(
                 coarse_args,
                 cwd=run_dir,
@@ -1047,8 +1267,22 @@ def run_model(
                 capture_output=True,
                 text=True,
             )
-        if fine_stop_time>0:
-            print("Runing fine simulation")
+            generated_linearized_model = run_dir / "linearized_model.py"
+            requested_linearized_model = run_dir / linearized_model_file
+            if not generated_linearized_model.exists():
+                raise FileNotFoundError(
+                    "OpenModelica did not generate linearized_model.py"
+                )
+            if generated_linearized_model != requested_linearized_model:
+                generated_linearized_model.replace(requested_linearized_model)
+            if verbose:
+                print(
+                    "Linearized model available at "
+                    f"{requested_linearized_model}"
+                )
+        if fine_stop_time > 0:
+            if verbose:
+                print("Running fine simulation")
             logs["fine"] = subprocess.run(
                 fine_args,
                 cwd=run_dir,
@@ -1068,7 +1302,7 @@ def run_model(
             "params": {} if params is None else dict(params),
         }
     except Exception:
-        if not keep_runs:
+        if copy_exe and not keep_runs:
             shutil.rmtree(run_dir, ignore_errors=True)
         raise
 
@@ -1102,6 +1336,7 @@ class TESMCMCFit:
         keep_runs=False,
         extra_coarse_args=None,
         extra_fine_args=None,
+        verbose=False,
     ):
         self.build_dir = Path(build_dir).resolve()
         self.model_exe = Path(model_exe)
@@ -1125,6 +1360,7 @@ class TESMCMCFit:
         self.keep_runs = keep_runs
         self.extra_coarse_args = list(extra_coarse_args or [])
         self.extra_fine_args = list(extra_fine_args or [])
+        self.verbose = bool(verbose)
 
         self.parameter_names = []
         self.priors = {}
@@ -1286,6 +1522,7 @@ class TESMCMCFit:
             result = run_model(
                 model_exe=self.model_exe,
                 build_dir=self.build_dir,
+                copy_exe=True,
                 override_file=self.base_override_file,
                 params=params,
                 equilibrium_time=self.equilibrium_time,
@@ -1300,6 +1537,7 @@ class TESMCMCFit:
                 keep_runs=self.keep_runs,
                 extra_coarse_args=self.extra_coarse_args,
                 extra_fine_args=self.extra_fine_args,
+                verbose=self.verbose,
             )
             self.last_result = result
             self.last_error = None
@@ -1416,7 +1654,8 @@ class TESMCMCFit:
             return -np.inf
 
         finally:
-            if not self.keep_runs:
+            run_dir = Path(result["run_dir"]).resolve()
+            if not self.keep_runs and run_dir != self.build_dir:
                 shutil.rmtree(result["run_dir"], ignore_errors=True)
 
     def log_probability(self, theta):
