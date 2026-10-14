@@ -29,3 +29,9 @@ The Git history currently contains only an initial commit, so use concise impera
 ## Agent-Specific Instructions
 
 Do not overwrite generated diagrams or existing model annotations unless the task requires it. Preserve user calibration values, units, and solver settings when editing equations or component topology.
+
+## Documentation and Plan History
+
+- All generated or modified code must include explanatory comments or docstrings following Google style. Python docstrings should use `Args`, `Returns`, and `Raises` sections where applicable; use the corresponding structured comment style for other languages.
+- In plan mode, save the complete plan in `plan_history/` before beginning execution. Name the file `YYYYMMDD-HHMMSS-short-description.md` using local repository time.
+- Maintain `plan_history/README.md` as a brief cumulative index. Add one dated entry for every newly generated plan, including a link to its full archived plan.

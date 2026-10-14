@@ -4,7 +4,7 @@ cd("../build");
 
 loadModel(Modelica, {"4.1.0"});
 loadFile("../libTES.mo");
-loadFile("../System_LMO.mo");
+loadFile("../models/System_LMO.mo");
 
 
 // Set the linearization dump language to Python
