@@ -11,12 +11,56 @@ import scipy
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
-
-
 if np.lib.NumpyVersion(np.__version__) < "2.4.0":
     trapz = np.trapz
 else:
     trapz = np.trapezoid
+
+
+<<<<<<< HEAD
+def get_collection_efficiency(time, data, energy, index_input):
+    """
+    Calcualte the collection efficiency (1 - 2*(Rsh+Rp)/(Rsh + Rp+Rn*bias_point))*Ib*Rsh * integral + (Rp+Rsh)*integral2 
+    for a given input
+    
+    Parameters:
+    --- 
+    time (numpy.ndarray): Time array
+    data (dict[str, numpy.ndarray]): a dictionary mapping Modelica variable names to values.
+    energy (double): True energy deposited in the target
+    index_input : int
+                Zero-based state-space coordinate to excite. The excitation uses
+                the corresponding ``external_input_coeff`` value.
+
+    Returns:
+    ---
+    double: collection efficiency in eV (measured/true)
+    """
+
+    if index_input == 0:
+                raise ValueError(
+                    "index_cinput is 1-based for heat capacities; use 1 for c1 "
+                    "or a negative value to count from the end"
+                )
+    else:
+        Rsh = data["RL.R"][-1]
+        Rp = data["Rp.R"][-1]
+        R0 = data["R0"][-1]
+        Ib = data["TESBias.I"][-1]
+        integral = trapz(-(data[f"c{index_input}.i"] - np.mean(data[f'c{index_input}.i'][:10])), time)
+        integral2 = trapz((data[f"c{index_input}.i"] - np.mean(data[f'c{index_input}.i'][:10]))**2, time)
+        Jpower = (1 - 2*(Rsh+Rp)/(Rsh + Rp+R0))*Ib*Rsh * integral + (Rp+Rsh)*integral2 
+        E_meas = Jpower/ scipy.constants.e
+        epsilon = E_meas/energy *100
+        print(f"Collection Efficiency is  {epsilon:.3f}%")
+        return epsilon
+    
+=======
+if np.lib.NumpyVersion(np.__version__) < "2.4.0":
+    trapz = np.trapz
+else:
+    trapz = np.trapezoid
+>>>>>>> upstream/master
     
 def get_impulse_response(A, input_index, T=None, input_scale=1.0):
     """
@@ -562,10 +606,22 @@ class TESModel:
 
         return self.frequencies, self.noise_current
     
+<<<<<<< HEAD
+    def get_resolution(self, dIdP = None, fmin = None, fmax = None, index_cinput = -1):
+=======
     def get_resolution(self, dIdP = None, index_cinput = -1, fmin = None, fmax = None, n_interp=None):
+>>>>>>> upstream/master
         if not hasattr(self, "noise_current_total"):
             raise ValueError("Run get_noise() first!")
-        
+
+        mask = np.ones(self.frequencies.shape, dtype=bool)
+
+        if fmin is not None:
+                mask &= self.frequencies >= fmin
+
+        if fmax is not None:
+            mask &= self.frequencies <= fmax
+
         dIdP = self.get_dIdP(index_cinput = index_cinput) if dIdP is None else dIdP
         self.noise_power = {key: abs(self.noise_current[key]/dIdP) for key in self.noise_current}
         self.noise_power_square_sum = np.sum(np.square(list(self.noise_power.values())), axis=0)
@@ -596,6 +652,13 @@ class TESModel:
                 n_interp = len(self.frequencies)*10
         frequencies_interp = np.linspace(f_low, f_high, n_interp)
         integrand = 1 / self.noise_power_square_sum
+<<<<<<< HEAD
+        self.noise_power_integral = trapz(
+            integrand[mask],
+            self.frequencies[mask],
+        )
+
+=======
         integrand_interp = np.interp(
             frequencies_interp,
             self.frequencies,
@@ -607,6 +670,7 @@ class TESModel:
             integrand_interp,
             frequencies_interp,
         )        
+>>>>>>> upstream/master
         # Compute the resolution of our detector
         self.resolution_sigma = 1/np.sqrt(4.*self.noise_power_integral)
         self.resolution_sigma_ev = self.resolution_sigma/scipy.constants.e
@@ -616,8 +680,14 @@ class TESModel:
     def get_resolution_split(self, 
                             index_cinput1 = 2, 
                             index_cinput2 = 2, 
+<<<<<<< HEAD
+                            fraction_1 = 0.5, 
+                            fmin = None, 
+                            fmax = None):
+=======
                             fraction_1 = 0.5,
                             fmin = None, fmax = None):
+>>>>>>> upstream/master
         """
         Calcuate resolution when splitting the input energy in two heat capacities.
         """    
@@ -625,7 +695,13 @@ class TESModel:
         dIdP_1 = self.get_dIdP(index_cinput = index_cinput1)
         dIdP_2 = self.get_dIdP(index_cinput = index_cinput2)
         self.dIdP_combined = dIdP_1*fraction_1 + dIdP_2 * (1-fraction_1)
+<<<<<<< HEAD
+        self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined, 
+                                                                fmin = fmin, 
+                                                                fmax = fmax)
+=======
         self.resolution_combined_sigma_ev = self.get_resolution(dIdP = self.dIdP_combined, fmin = fmin, fmax = fmax)
+>>>>>>> upstream/master
         return self.resolution_combined_sigma_ev
     
     def get_impulse(self, index = -1, index_cinput = -1, T=None):
@@ -1102,8 +1178,7 @@ class TESModel:
         for name, val in sorted(zip(self.model["stateVars"], p), key=lambda x: abs(x[1]),
         reverse=True):
             print(name, val, abs(val))    
-
-
+        
 
 def _write_override_file(base_override_file, params, run_dir):
     """Create a run-local OpenModelica override file.
@@ -1834,6 +1909,10 @@ def load(filename):
 
         return names
 
+    def Calc_R0(Rn, alpha0, Tc, T, beta0, I0, i, p0=2):
+        return Rn/2*(1. + np.tanh(alpha0/Tc * (T - Tc * (1+beta0/alpha0/p0) * (1 - (abs(i)/I0)**p0 * beta0 / (p0+alpha0 + beta0)) ) ))
+    
+
     n_variables = data_info.shape[1]
     names = decode_strings(name_matrix, n_variables)
 
@@ -1865,6 +1944,16 @@ def load(filename):
         variables[name] = np.asarray(values).squeeze()
 
     time = np.asarray(data_2[0, :]).squeeze()
+
+    Rn = variables["TES_Rn"][-1]
+    alpha = variables["TES_alpha"][-1]
+    beta = variables["TES_beta"][-1]
+    Tc = variables["TES_Tc"][-1]
+    I0 = variables["TES_I0"][-1]
+    i = variables["c1.i"]
+    T = variables["c1.T"]
+
+    variables["R0"] = Calc_R0(Rn, alpha, Tc, T, beta, I0, i)
 
     return time, variables
 
@@ -2433,31 +2522,44 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
             ind_gs.append(int(m_g.group(1)))
     
     ## Define for each system name the corresponding replacement rules
-    if system_name == "System_LMO":
-        search_text = f"m=TES_m"
-        replace_text = f"C={data[f'c1.C'][-1]:.3g}"
+    # if system_name == "System_LMO":
+    search_text = f"m=TES_m"
+    replace_text = f"C={data[f'c1.C'][-1]:.3g}"
+    content = content.replace(search_text, replace_text)
+    
+    search_text = f"=TES_Tc"
+    replace_text = f"={data[f'c1.T'][-1]:.3g}"
+    content = content.replace(search_text, replace_text)
+
+    search_text = f"=Tb"
+    replace_text = f"={data[f'fixedTemperature.T'][-1]*1e3:.3g} mK"
+    content = content.replace(search_text, replace_text)
+
+    
+    search_text = f"=Bias_R<"
+    replace_text = f"={data[f'Bias_R'][-1]*1e3:.3g} mOhm<"
+    content = content.replace(search_text, replace_text)
+
+
+    search_text = f"=Bias_Rp"
+    replace_text = f"={data[f'Bias_Rp'][-1]*1e3:.3g} mOhm"
+    content = content.replace(search_text, replace_text)
+        
+    for i in ind_gs:
+        search_text = f"K=K{i} <"
+        replace_text = f"G={data[f'g{i}.G'][-1]:.3g} <"
         content = content.replace(search_text, replace_text)
-        
-        search_text = f"=TES_Tc"
-        replace_text = f"={data[f'c1.T'][-1]:.3g}"
+    
+    for i in ind_cs:
+        search_text = f"m=m{i} <"
+        replace_text = f"C={data[f'c{i}.C'][-1]:.3g} <"
         content = content.replace(search_text, replace_text)
+        # print(search_text,data[f'c{i}.C'][-1])
         
-                
-        for i in ind_gs:
-            search_text = f"K=K{i} <"
-            replace_text = f"G={data[f'g{i}.G'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
-        
-        for i in ind_cs:
-            search_text = f"m=m{i} <"
-            replace_text = f"C={data[f'c{i}.C'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
-            # print(search_text,data[f'c{i}.C'][-1])
-            
-            # Add temperature
-            search_text = f">c{i}<"
-            replace_text = f">c{i} {data[f'c{i}.T'][-1]*1000:.3g}mK<"
-            content = content.replace(search_text, replace_text)            
+        # Add temperature
+        search_text = f">c{i}<"
+        replace_text = f">c{i} {data[f'c{i}.T'][-1]*1000:.3g}mK<"
+        content = content.replace(search_text, replace_text)            
 
         
         search_text = f"m=TES_m"
