@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import warnings
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -2381,109 +2382,187 @@ def load_linearized_model(linearized_model):
     }
 
 
-## Modify SVGs with simulation result
+# Modify SVGs with simulation results.
 
-def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900, display=True):
+
+def _svg_result_value(data, keys, sample_index):
+    """Return one finite scalar from the first available result key.
+
+    Args:
+        data: Mapping of simulation result names to scalar or array-like values.
+        keys: Result names to try in priority order.
+        sample_index: Index used when a result is array-like.
+
+    Returns:
+        The selected value as a float, or ``None`` when none of the candidates
+        contains a finite scalar at the requested sample.
     """
-    Write an SVG diagram with simulated LMO values substituted into labels.
+    for key in keys:
+        if key not in data:
+            continue
 
-    For ``system_name == "System_LMO"``, placeholder labels such as ``K=K1``
-    and ``m=m1`` are replaced with the final conductance ``g*.G``, heat
-    capacity ``c*.C``, and TES temperature values from a simulation result
-    dictionary. The original SVG is read from ``filename`` and the modified SVG
-    is written to ``output_filename``.
+        values = np.asarray(data[key])
+        try:
+            value = values.item() if values.ndim == 0 else values[sample_index]
+            value = float(value)
+        except (IndexError, TypeError, ValueError):
+            continue
+        if np.isfinite(value):
+            return value
+    return None
 
-    Parameters
-    ----------
-    filename : str or pathlib.Path
-        Source SVG file.
-    output_filename : str or pathlib.Path
-        Destination SVG file to write.
-    data : dict[str, array-like]
-        Simulation variables, usually the second return value from ``load``.
-    system_name : str, optional
-        System-specific replacement rule set. Currently only ``"System_LMO"``
-        has replacement rules.
-    width : int, optional
-        Display width in pixels for the returned notebook HTML.
-    display : bool, optional
-        If true, return an ``IPython.display.HTML`` image tag for notebook
-        display. If false, only write the output file.
 
-    Returns
-    -------
-    IPython.display.HTML or None
-        Notebook display object when ``display`` is true, otherwise ``None``.
+def _replace_svg_text(text, data, sample_index, replacements, missing_labels):
+    """Annotate a single SVG text node while retaining its outer whitespace.
+
+    Args:
+        text: Raw text stored in an SVG ``text`` element.
+        data: Mapping of simulation result names to values.
+        sample_index: Simulation sample to display.
+        replacements: Exact custom label replacements supplied by the caller.
+        missing_labels: Set populated with recognized labels lacking data.
+
+    Returns:
+        The annotated text, including the original leading and trailing
+        whitespace.
     """
-    with open(filename, 'r') as file:
-        content = file.read()
+    label = text.strip()
+    if not label:
+        return text
 
-    # Replace the target text
-    # updated_content = content.replace(search_text, replace_text)
-    
-    # Find a list of c and g
-    ind_cs = []
-    ind_gs = []
-    for key in data:
-        m_c = re.fullmatch(r"c(\d+)\.C", key)
-        m_g = re.fullmatch(r"g(\d+)\.G", key)
-        if m_c:
-            ind_cs.append(int(m_c.group(1)))
-        if m_g:
-            ind_gs.append(int(m_g.group(1)))
-    
-    ## Define for each system name the corresponding replacement rules
-    if system_name == "System_LMO":
-        search_text = f"m=TES_m"
-        replace_text = f"C={data[f'c1.C'][-1]:.3g}"
-        content = content.replace(search_text, replace_text)
-        
-        search_text = f"=TES_Tc"
-        replace_text = f"={data[f'c1.T'][-1]:.3g}"
-        content = content.replace(search_text, replace_text)
-        
-                
-        for i in ind_gs:
-            search_text = f"K=K{i} <"
-            replace_text = f"G={data[f'g{i}.G'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
-        
-        for i in ind_cs:
-            search_text = f"m=m{i} <"
-            replace_text = f"C={data[f'c{i}.C'][-1]:.3g} <"
-            content = content.replace(search_text, replace_text)
-            # print(search_text,data[f'c{i}.C'][-1])
-            
-            # Add temperature
-            search_text = f">c{i}<"
-            replace_text = f">c{i} {data[f'c{i}.T'][-1]*1000:.3g}mK<"
-            content = content.replace(search_text, replace_text)            
+    leading = text[: len(text) - len(text.lstrip())]
+    trailing = text[len(text.rstrip()) :]
 
-        
-        search_text = f"m=TES_m"
-        replace_text = f"C={data[f'c1.C'][-1]:.3g}"
-        content = content.replace(search_text, replace_text)
-        
-        search_text = f"=TES_Tc"
-        replace_text = f"={data[f'c1.T'][-1]:.3g}"
-        content = content.replace(search_text, replace_text)
+    if label in replacements:
+        replacement = replacements[label]
+        if not isinstance(replacement, str):
+            raise TypeError("SVG replacement values must be strings")
+        return f"{leading}{replacement}{trailing}"
 
-        search_text = f"=Tb"
-        replace_text = f"={data[f'fixedTemperature.T'][-1]*1e3:.3g} mK"
-        content = content.replace(search_text, replace_text)
+    value = None
+    replacement = None
+    match = re.fullmatch(r"K=K(\d+)", label)
+    if match:
+        index = match.group(1)
+        value = _svg_result_value(data, (f"g{index}.G", f"G{index}"), sample_index)
+        if value is not None:
+            replacement = f"G={value:.3g}"
 
-        search_text = f"=Bias_R<"
-        replace_text = f"={data[f'Bias_R'][-1]*1e3:.3g} mOhm<"
-        content = content.replace(search_text, replace_text)
+    match = re.fullmatch(r"m=m(\d+)", label)
+    if match:
+        index = match.group(1)
+        value = _svg_result_value(data, (f"c{index}.C", f"C{index}"), sample_index)
+        if value is not None:
+            replacement = f"C={value:.3g}"
 
-        search_text = f"=Bias_Rp"
-        replace_text = f"={data[f'Bias_Rp'][-1]*1e3:.3g} mOhm"
-        content = content.replace(search_text, replace_text)
+    match = re.fullmatch(r"c(\d+)", label)
+    if match:
+        index = match.group(1)
+        value = _svg_result_value(data, (f"c{index}.T", f"T{index}"), sample_index)
+        if value is not None:
+            replacement = f"c{index} {value * 1e3:.3g}mK"
 
-    # Open the file in write mode to overwrite it
-    with open(output_filename, "w") as file:
-        file.write(content)
-        
+    if label == "m=TES_m":
+        value = _svg_result_value(data, ("c1.C", "C1"), sample_index)
+        if value is not None:
+            replacement = f"C={value:.3g}"
+    elif "TES_Tc" in label:
+        value = _svg_result_value(data, ("c1.T", "T1"), sample_index)
+        if value is not None:
+            replacement = label.replace("TES_Tc", f"{value:.3g}")
+    elif "=Tb" in label:
+        value = _svg_result_value(data, ("fixedTemperature.T",), sample_index)
+        if value is not None:
+            replacement = label.replace("=Tb", f"={value * 1e3:.3g} mK")
+    elif label in ("R=Bias_R", "R=Bias_Rp"):
+        key = label.removeprefix("R=")
+        value = _svg_result_value(data, (key,), sample_index)
+        if value is not None:
+            replacement = f"R={value * 1e3:.3g} mOhm"
+
+    if replacement is not None:
+        return f"{leading}{replacement}{trailing}"
+    if value is None and (
+        re.fullmatch(r"(?:K=K|m=m|c)\d+", label)
+        or label == "m=TES_m"
+        or "TES_Tc" in label
+        or "=Tb" in label
+        or label in ("R=Bias_R", "R=Bias_Rp")
+    ):
+        missing_labels.add(label)
+    return text
+
+
+def mod_svg(
+    filename,
+    output_filename,
+    data,
+    system_name="System_LMO",
+    width=900,
+    display=True,
+    *,
+    sample_index=-1,
+    replacements=None,
+):
+    """Write an SVG diagram annotated with simulation values.
+
+    The default rules recognize TES thermal-network labels independently of a
+    particular system name. Labels ``K=KN``, ``m=mN``, and ``cN`` use the
+    corresponding conductance, heat capacity, and temperature results. Custom
+    replacements are matched against stripped SVG text and take precedence.
+
+    Args:
+        filename: Source SVG path.
+        output_filename: Destination SVG path.
+        data: Mapping of simulation result names to scalar or array-like values.
+        system_name: Retained for compatibility with older callers. Annotation
+            is now inferred from SVG labels, so this value does not gate rules.
+        width: Display width in pixels for returned notebook HTML.
+        display: Whether to return an ``IPython.display.HTML`` image tag.
+        sample_index: Index selected from array-like simulation results.
+        replacements: Optional mapping of exact stripped SVG labels to their
+            replacement text.
+
+    Returns:
+        An ``IPython.display.HTML`` object when ``display`` is true; otherwise
+        ``None``.
+
+    Raises:
+        TypeError: If a custom replacement value is not a string.
+        xml.etree.ElementTree.ParseError: If the source is not valid XML.
+    """
+    del system_name
+    replacements = {} if replacements is None else replacements
+
+    # Preserve the SVG's default namespace rather than emitting ``ns0`` tags.
+    namespaces = dict(
+        namespace for _, namespace in ET.iterparse(filename, events=("start-ns",))
+    )
+    for prefix, uri in namespaces.items():
+        if not prefix.startswith("ns"):
+            ET.register_namespace(prefix, uri)
+
+    tree = ET.parse(filename)
+    missing_labels = set()
+    for element in tree.getroot().iter():
+        if element.tag.rsplit("}", 1)[-1] != "text" or element.text is None:
+            continue
+        element.text = _replace_svg_text(
+            element.text,
+            data,
+            sample_index,
+            replacements,
+            missing_labels,
+        )
+
+    tree.write(output_filename, encoding="utf-8", xml_declaration=True)
+    if missing_labels:
+        warnings.warn(
+            "SVG labels left unchanged because matching simulation values were "
+            f"missing or invalid: {', '.join(sorted(missing_labels))}",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if display:
         from IPython.display import HTML
@@ -2494,3 +2573,4 @@ def mod_svg(filename, output_filename, data, system_name="System_LMO", width=900
             f'width="{width}" '
             'style="background-color: #ffffff; padding: 16px; border-radius: 8px;">'
         )
+    return None

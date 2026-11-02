@@ -3,12 +3,120 @@
 import subprocess
 import tempfile
 import unittest
+import warnings
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock
 
 import numpy as np
 
 import pymodelica
+
+
+class SvgAnnotationTest(unittest.TestCase):
+    """Test topology-independent SVG simulation annotations."""
+
+    @staticmethod
+    def render_svg(svg_text, data, **kwargs):
+        """Render an SVG fixture and return its text labels.
+
+        Args:
+            svg_text: Complete SVG fixture content.
+            data: Simulation-result mapping passed to ``mod_svg``.
+            **kwargs: Additional ``mod_svg`` keyword arguments.
+
+        Returns:
+            A tuple containing the helper result and rendered text labels.
+        """
+        temporary_directory = tempfile.TemporaryDirectory()
+        directory = Path(temporary_directory.name)
+        source = directory / "source.svg"
+        output = directory / "output.svg"
+        source.write_text(svg_text, encoding="utf-8")
+        result = pymodelica.mod_svg(
+            source,
+            output,
+            data,
+            **kwargs,
+        )
+        labels = [
+            element.text
+            for element in ET.parse(output).getroot().iter()
+            if element.tag.rsplit("}", 1)[-1] == "text"
+        ]
+        temporary_directory.cleanup()
+        return result, labels
+
+    def test_discovers_numbered_components_and_aliases(self):
+        """Annotate spaced and unspaced labels without a system-name gate."""
+        svg = """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg">
+  <text> K=K1 </text><text>K=K17</text>
+  <text>m=m12</text><text>c12</text>
+  <text>m=TES_m</text><text>Tc=TES_Tc, I0=TES_I0</text>
+  <text>R=Bias_R</text><text>R=Bias_Rp</text>
+</svg>
+"""
+        data = {
+            "g1.G": np.array([1.0, 2.0]),
+            "G17": 17.0,
+            "C12": 12.0,
+            "T12": np.array([0.012, 0.013]),
+            "C1": 1.0,
+            "T1": 0.021,
+            "Bias_R": 0.002,
+            "Bias_Rp": 0.003,
+        }
+
+        result, labels = self.render_svg(
+            svg,
+            data,
+            system_name="System_LMO_v1",
+            sample_index=0,
+            display=False,
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(labels[0], " G=1 ")
+        self.assertIn("G=17", labels)
+        self.assertIn("C=12", labels)
+        self.assertIn("c12 12mK", labels)
+        self.assertIn("C=1", labels)
+        self.assertIn("Tc=0.021, I0=TES_I0", labels)
+        self.assertIn("R=2 mOhm", labels)
+        self.assertIn("R=3 mOhm", labels)
+
+    def test_custom_replacement_overrides_automatic_rule(self):
+        """Give exact custom replacements precedence over inferred values."""
+        svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>K=K1</text></svg>'
+
+        html, labels = self.render_svg(
+            svg,
+            {"g1.G": np.array([2.0])},
+            replacements={"K=K1": "custom conductance"},
+            width=321,
+            display=True,
+        )
+
+        self.assertEqual(labels, ["custom conductance"])
+        self.assertIn('width="321"', html.data)
+
+    def test_warns_once_and_preserves_labels_with_missing_data(self):
+        """Report all missing recognized values without discarding the SVG."""
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<text>K=K1</text><text>c13</text><text>ordinary label</text>'
+            "</svg>"
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _, labels = self.render_svg(svg, {}, display=False)
+
+        self.assertEqual(labels, ["K=K1", "c13", "ordinary label"])
+        self.assertEqual(len(caught), 1)
+        self.assertIn("K=K1", str(caught[0].message))
+        self.assertIn("c13", str(caught[0].message))
 
 
 class LinearCollectionEfficiencyTest(unittest.TestCase):

@@ -103,7 +103,7 @@ Simulation from `omc` may create generated C files, object files, an executable,
 - `load_linearized_model(linearized_model)` normalizes a Python linearization dump produced with `--linearizationDumpLanguage=python`. It returns NumPy arrays for `x0`, `u0`, `A`, `B`, `C`, and `D`, and reorders states to `CL_v`, `L_i`, then `c1_T`, `c2_T`, \cdots by numeric heat-capacity index.
 - `parse_thermal_conductance_connections(modelica_file)` reads the full Modelica source and maps each nonlinear conductance `g*` to the heat-capacity endpoints connected to `port_a` and `port_b`. A fixed-temperature bath endpoint is reported as `0`.
 - `TESModel` combines the linearized model, full Modelica source, and steady-state simulation results to compute frequency-domain transfer functions, complex impedance, phonon/Johnson/readout noise contributions, and equivalent input noise.
-- `mod_svg(\cdots)` writes a copy of `System_LMO.svg` with selected simulated values substituted into the diagram labels.
+- `mod_svg(\cdots)` writes an annotated SVG copy by matching numbered `cN` and `gN` diagram labels to simulated temperatures, heat capacities, and conductances. It also accepts exact custom text replacements for nonstandard diagrams.
 
 Example workflow:
 

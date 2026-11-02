@@ -41,6 +41,8 @@ else
   exit 2
 fi
 
+echo "Compiling Modelica file: ${model_path}" >&2
+
 if [[ ${model_path##*.} != "mo" ]]; then
   echo "Expected a .mo Modelica file: ${model_path}" >&2
   exit 2
