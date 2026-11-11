@@ -1,18 +1,18 @@
-# TES Thermal Model
+# Cryogenic Detector Thermal Model
 
-Modelica models for thermal and electrothermal simulations of Transition Edge Sensor (TES) detectors. The repository contains a reusable component library plus system-level examples for TES biasing, Joule heating, nonlinear thermal links, temperature-dependent heat capacities, and detector response to pulsed energy input.
+Modelica models for thermal and electrothermal simulations of cryogenic particle detectors, such as Transition Edge Sensor (TES) and Neutron Transmutation Doped (NTD) sensors. The repository contains a reusable component library plus system-level examples for TES biasing, Joule heating, nonlinear thermal links, temperature-dependent heat capacities, and detector response to pulsed energy input.
 
 ## 1. Repository Contents
 
 - `libTES.mo` - local Modelica package containing reusable TES thermal-model components.
-- `System_1block.mo` - one-block TES system using `libTES.TES2` and nonlinear thermal conductance.
-- `System_1block_linearG.mo` - one-block TES system using `libTES.TES` and Modelica's linear `ThermalConductor`.
-- `System_LMO.mo` - larger LMO detector thermal network with multiple heat-capacity nodes and conductance links.
+- `/models` -  System-level model examples
+    - `System_1block.mo` - one-block TES system using `libTES.TES2` and nonlinear thermal conductance.
+    - `System_1block_linearG.mo` - one-block TES system using `libTES.TES` and Modelica's linear `ThermalConductor`.
+    - `System_LMO.mo` - larger LMO detector thermal network with multiple heat-capacity nodes and conductance links.
 - `/parameters` - reference parameter set.
 - `/python` - python scripts and notebooks for running simulations and analyzing results
 - `/script` - `omc` scripts to run and build models
 
-All Modelica source files currently live at the repository root. The reusable components are organized inside `libTES.mo`; the system models instantiate them with qualified names such as `libTES.TES2` and `libTES.ThermlConductanceN`.
 
 The Modelica models give you a time-domain simulation of the full non-linear model (including all nonlinearities in resistance, heat capacitance and conductance).
 As for noise and complex impedance analysis, you need to generate a linearized model around the equilibrium point.
@@ -20,7 +20,52 @@ As for noise and complex impedance analysis, you need to generate a linearized m
 
 ### 1.1 Requirements
 
-Use OpenModelica/OMEdit with the Modelica Standard Library. Follow the installation guide on https://openmodelica.org/. If OpenModelica reports that the Modelica package is missing, install Modelica 4.1.0 from OMEdit's package manager or through an OpenModelica script.
+Use OpenModelica/OMEdit with the Modelica Standard Library. For Windows computers, follow the installation guide on https://openmodelica.org/. For MacOS, a docker installation is recommended. If OpenModelica reports that the Modelica package is missing, install Modelica 4.1.0 from OMEdit's package manager or through an OpenModelica script.
+
+#### Installing on HPC
+
+Container is the first option if available. Make a directory and pull the official apptainer image. Only consider compiling from source as the last resort, given the complicated dependencies. 
+
+```bash
+module load apptainer # Or singularity
+apptainer pull openmodelica.sif \
+  docker://openmodelica/openmodelica:v1.27.1-gui
+
+# Make an alias
+echo "alias omc='apptainer exec $(realpath openmodelica.sif) omc'" >> ~/.bashrc
+
+# Verify installation: print the version of omc compiler
+apptainer exec openmodelica.sif   omc --version
+
+# You can also start the shell of this image with
+apptainer shell openmodelica.sif
+```
+
+However, the image does not contain standard modelica libraries. You can open the openmodelica shell and install it:
+
+```bash
+apptainer exec openmodelica.sif  OMShell-terminal
+
+# (inside openmodelica shell)
+installPackage(Modelica, "4.1.0+maint.om", exactMatch=true);
+```
+
+If you want to be able to call omc directly without typing apptainer everytime, a wrapper can be made
+
+```bash
+mkdir -p "$HOME/bin" # You can change the location of the wrapper to somewhere else
+
+# Make a wrapper
+SIF_PATH="$(realpath openmodelica.sif)"
+cat > "$HOME/bin/omc" <<EOF
+#!/bin/bash
+exec apptainer exec "$SIF_PATH" omc "\$@"
+EOF
+chmod +x "$HOME/bin/omc"
+
+# Add to path
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+```
 
 ## 2. Running In OMEdit (GUI)
 
@@ -42,6 +87,8 @@ The model annotations store simulation settings so they travel with the files.
 - If a parameter is reported as having neither a value nor a start value, check the parameter declarations in the system model and any parameter file you are using.
 
 ## 3. Running From Command Line
+
+Openmodelica has a interactive sshell `OMShell-terminal` and a compiler `omc`.
 
 Because the system models depend on the local `libTES` package, load `libTES.mo` before checking or simulating a system model. A direct command such as `omc System_LMO.mo` may fail with `Class libTES\cdots not found` if the library is not already loaded.
 
